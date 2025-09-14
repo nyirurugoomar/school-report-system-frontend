@@ -11,6 +11,7 @@ function App() {
       <Routes>
         {/* Routes without layout */}
         <Route path='/' element={<SignIn />} />
+        <Route path='/signin' element={<SignIn />} />
         <Route path='/signup' element={<SignUp />} />
         <Route path='/success' element={<Success />} />
         {/* Routes with MainLayout */}
