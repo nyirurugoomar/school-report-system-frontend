@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { signin } from '../api/auth'
+import logo from '../assets/logo_reb.png'
 
 function SignIn() {
   const navigate = useNavigate()
@@ -68,6 +69,9 @@ function SignIn() {
     <div className='min-h-screen bg-slate-800 flex flex-col justify-center items-center px-4'>
       {/* Header */}
       <div className='text-center mb-8'>
+        <img src={logo} alt="logo" className='w-60 h-60' />
+      </div>
+      <div className='text-center mb-8'>
         <h1 className='text-4xl font-bold text-white mb-2'>Welcome Back</h1>
       </div>
 
@@ -80,15 +84,15 @@ function SignIn() {
           </div>
         )}
 
-        {/* Email Field */}
+        {/* Username Field */}
         <div className='space-y-2'>
-          <label className='block text-white text-sm font-medium'>Email Address</label>
+          <label className='block text-white text-sm font-medium'>Username</label>
           <input 
             type="username" 
             name="username"
             value={formData.username}
             onChange={handleChange}
-            placeholder='you@example.com'
+            placeholder='Enter your username'
             required
             className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400'
           />

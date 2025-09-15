@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { signup } from '../api/auth'
-
+import logo from '../assets/logo_reb.png'
 function SignUp() {
   const navigate = useNavigate()
   const [formData, setFormData] = useState({
@@ -46,6 +46,9 @@ function SignUp() {
 
   return (
     <div className='min-h-screen bg-slate-800 flex flex-col justify-center items-center px-4'>
+      <div className='text-center mb-8'>
+        <img src={logo} alt="logo" className='w-60 h-60' />
+      </div>
       <div className='text-center mb-8'>
         <h1 className='text-4xl font-bold text-white mb-2'>Create New Account</h1>
       </div>

@@ -1,24 +1,43 @@
 import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
-
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import logo from '../assets/logo_reb.png'
 function Navbar() {
   const location = useLocation()
+  const navigate = useNavigate()
   
   // Helper function to check if current route is active
   const isActive = (path) => {
     return location.pathname === path || location.pathname.startsWith(path + '/')
   }
 
+  // Logout functionality
+  const handleLogout = () => {
+    try {
+      // Clear any stored authentication data
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      sessionStorage.clear()
+      
+      // Redirect to sign in page
+      navigate('/signin')
+      
+      // Optional: Show success message
+      console.log('Successfully logged out')
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Still redirect even if there's an error
+      navigate('/signin')
+    }
+  }
+
   return (
     <div className='bg-slate-900 px-6 py-4 flex justify-between items-center'>
-      {/* Left side - Room and Credits info */}
-      {/* <div className='text-gray-300 text-sm'>
-        <span>Room: 203 | Credits: 3</span>
-      </div> */}
-      
-      {/* Right side - Navigation buttons */}
+
+      <div>
+        <img src={logo} alt="logo" className='w-16 h-14' />
+      </div>
+      {/* Left side - Navigation buttons */}
       <div className='flex space-x-4'>
-        
         <Link 
           to="/comment" 
           className={`px-4 py-2 rounded-md transition-colors ${
@@ -39,6 +58,19 @@ function Navbar() {
         >
           Attendance
         </Link>
+        
+      </div>
+      
+      {/* Right side - Logout button */}
+      <div className='flex items-center'>
+        <button 
+          onClick={handleLogout}
+          className='px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors duration-200 flex items-center space-x-2'
+          title="Logout from the system"
+        >
+          <span>🚪</span>
+          <span>Logout</span>
+        </button>
       </div>
     </div>
   )
