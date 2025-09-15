@@ -38,19 +38,21 @@ export const getAttendanceRecords = async (filters = {}) => {
   }
 };
 
-export const getAttendanceByClass = async (classId, date) => {
-  try {
-    console.log('Making get attendance by class request to:', `${api.defaults.baseURL}/attendance/class/${classId}`);
-    const response = await api.get(`/attendance/class/${classId}`, { 
-      params: date ? { date } : {} 
-    });
-    console.log('Get attendance by class response:', response);
-    return response.data;
-  } catch (error) {
-    console.error('Get attendance by class API error:', error);
-    throw error;
-  }
-};
+export const getAttendanceByClass = async (classId, date = null) => {
+    try {
+      const url = date 
+        ? `/attendance/class/${classId}?date=${date}`
+        : `/attendance/class/${classId}`;
+      
+      console.log('Making get attendance by class request to:', `${api.defaults.baseURL}${url}`);
+      const response = await api.get(url);
+      console.log('Get attendance by class response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('Get attendance by class API error:', error);
+      throw error;
+    }
+  };
 
 export const getAttendanceByStudent = async (studentId) => {
   try {
@@ -60,6 +62,22 @@ export const getAttendanceByStudent = async (studentId) => {
     return response.data;
   } catch (error) {
     console.error('Get attendance by student API error:', error);
+    throw error;
+  }
+};
+
+export const getAttendanceSummary = async (classId, date = null) => {
+  try {
+    const url = date 
+      ? `/attendance/class/${classId}/summary?date=${date}`
+      : `/attendance/class/${classId}/summary`;
+    
+    console.log('Making get attendance summary request to:', `${api.defaults.baseURL}${url}`);
+    const response = await api.get(url);
+    console.log('Get attendance summary response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get attendance summary API error:', error);
     throw error;
   }
 };

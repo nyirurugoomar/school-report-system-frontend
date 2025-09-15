@@ -40,18 +40,46 @@ function Attendance() {
   // Students data with class association
   const [students, setStudents] = useState([])
 
+  // Students modal states
+  const [showStudentsModal, setShowStudentsModal] = useState(false)
+  const [selectedClassForStudents, setSelectedClassForStudents] = useState(null)
+  
+  // Attendance improvement states
+  const [attendanceSummary, setAttendanceSummary] = useState({
+    total: 0,
+    present: 0,
+    absent: 0,
+    late: 0,
+    excused: 0
+  })
+  const [autoSave, setAutoSave] = useState(false)
+
   // Load classes and students on component mount
   useEffect(() => {
     loadClasses()
     loadStudents()
   }, [])
 
-  // Load attendance records when class or date changes
+  // Load attendance records when classes, date, or selectedClass changes
   useEffect(() => {
-    if (selectedClass && attendanceDate) {
-      loadAttendanceRecords()
+    if (classes.length > 0 && attendanceDate) {
+      if (selectedClass) {
+        loadAttendanceRecords()
+      } else {
+        loadAllAttendanceRecords()
+      }
+      // Also load attendance summary
+      if (selectedClass) {
+        const selectedClassData = classes.find(cls => cls.className === selectedClass);
+        if (selectedClassData) {
+          loadAttendanceSummary(selectedClassData._id, attendanceDate);
+        }
+      } else {
+        loadAttendanceSummaryForAllClasses(attendanceDate);
+      }
     }
-  }, [selectedClass, attendanceDate])
+  }, [classes, attendanceDate, selectedClass])
+
 
   const loadClasses = async () => {
     try {
@@ -77,26 +105,28 @@ function Attendance() {
       console.error('Error loading students:', error)
       // Fallback to mock data if API fails
       setStudents([
-        { _id: '1', studentName: 'John Doe', classId: '1', schoolId: 'school1' },
-        { _id: '2', studentName: 'Jane Smith', classId: '1', schoolId: 'school1' },
-        { _id: '3', studentName: 'Mike Johnson', classId: '2', schoolId: 'school1' },
-        { _id: '4', studentName: 'Sarah Wilson', classId: '2', schoolId: 'school1' },
-        { _id: '5', studentName: 'David Brown', classId: '3', schoolId: 'school1' },
-        { _id: '6', studentName: 'Emily Davis', classId: '3', schoolId: 'school1' },
-        { _id: '7', studentName: 'Chris Miller', classId: '4', schoolId: 'school1' },
-        { _id: '8', studentName: 'Lisa Garcia', classId: '4', schoolId: 'school1' }
+        { _id: '1', studentName: 'John Doe', classId: '1', schoolId: '68c547e28a9c12a9210a256f' },
+        { _id: '2', studentName: 'Jane Smith', classId: '1', schoolId: '68c547e28a9c12a9210a256f' },
+        { _id: '3', studentName: 'Mike Johnson', classId: '2', schoolId: '68c547e28a9c12a9210a256f' },
+        { _id: '4', studentName: 'Sarah Wilson', classId: '2', schoolId: '68c547e28a9c12a9210a256f' },
+        { _id: '5', studentName: 'David Brown', classId: '3', schoolId: '68c547e28a9c12a9210a256f' },
+        { _id: '6', studentName: 'Emily Davis', classId: '3', schoolId: '68c547e28a9c12a9210a256f' },
+        { _id: '7', studentName: 'Chris Miller', classId: '4', schoolId: '68c547e28a9c12a9210a256f' },
+        { _id: '8', studentName: 'Lisa Garcia', classId: '4', schoolId: '68c547e28a9c12a9210a256f' }
       ])
     }
   }
 
-  const loadAttendanceRecords = async () => {
-    if (!selectedClass) return
+  const loadAttendanceRecords = async (classId = null) => {
+    const targetClassId = classId || (selectedClass ? classes.find(cls => cls.className === selectedClass)?._id : null)
+    if (!targetClassId) return
 
     try {
-      const selectedClassData = classes.find(cls => cls.className === selectedClass)
-      if (!selectedClassData) return
-
-      const response = await attendanceAPI.getAttendanceByClass(selectedClassData._id, attendanceDate)
+      // Pass the attendanceDate to filter by specific date
+      const response = await attendanceAPI.getAttendanceByClass(targetClassId, attendanceDate)
+      
+      // Only update records if we're loading for the selected class
+      if (!classId && selectedClass) {
       setAttendanceRecords(response)
       
       // Create a map of student attendance for easy lookup
@@ -109,13 +139,84 @@ function Attendance() {
         }
       })
       setStudentAttendance(attendanceMap)
+      }
+      
+      return response
       
     } catch (error) {
       console.error('Error loading attendance records:', error)
+      if (!classId && selectedClass) {
       setAttendanceRecords([])
       setStudentAttendance({})
+      }
+      return []
     }
   }
+
+  // Load attendance records for all classes to show counts in Classes Overview
+  const loadAllAttendanceRecords = async () => {
+    try {
+      const allRecords = []
+      
+      // Load attendance for each class
+      for (const cls of classes) {
+        try {
+          const response = await attendanceAPI.getAttendanceByClass(cls._id, attendanceDate)
+          allRecords.push(...response)
+        } catch (error) {
+          console.error(`Error loading attendance for class ${cls._id}:`, error)
+        }
+      }
+      
+      setAttendanceRecords(allRecords)
+      
+    } catch (error) {
+      console.error('Error loading all attendance records:', error)
+    }
+  }
+
+  // Load attendance summary for a specific class and date
+  const loadAttendanceSummary = async (classId, date) => {
+    try {
+      const summary = await attendanceAPI.getAttendanceSummary(classId, date);
+      setAttendanceSummary(summary);
+      console.log('Attendance summary loaded:', summary);
+    } catch (error) {
+      console.error('Error loading attendance summary:', error);
+    }
+  };
+
+  // Load attendance summary for all classes combined
+  const loadAttendanceSummaryForAllClasses = async (date) => {
+    try {
+      let totalSummary = {
+        total: 0,
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0
+      };
+
+      // Get summary for each class and combine them
+      for (const cls of classes) {
+        try {
+          const summary = await attendanceAPI.getAttendanceSummary(cls._id, date);
+          totalSummary.total += summary.total || 0;
+          totalSummary.present += summary.present || 0;
+          totalSummary.absent += summary.absent || 0;
+          totalSummary.late += summary.late || 0;
+          totalSummary.excused += summary.excused || 0;
+        } catch (error) {
+          console.error(`Error loading summary for class ${cls._id}:`, error);
+        }
+      }
+
+      setAttendanceSummary(totalSummary);
+      console.log('Combined attendance summary loaded:', totalSummary);
+    } catch (error) {
+      console.error('Error loading combined attendance summary:', error);
+    }
+  };
 
   const handleCreateClass = async () => {
     // Validation according to DTO
@@ -273,14 +374,27 @@ function Attendance() {
     }
   }
 
-  const toggleStudentAttendance = async (studentId, status) => {
-    if (!selectedClass) return
-
+  const toggleStudentAttendance = async (studentId, status, classId = null) => {
     setLoading(true)
     setError('')
 
     try {
-      const selectedClassData = classes.find(cls => cls.className === selectedClass)
+      // Determine which class to use - either from parameter or selectedClass
+      let targetClassId = classId
+      let selectedClassData = null
+      
+      if (classId) {
+        // If classId is provided (from Students Modal), use it directly
+        selectedClassData = classes.find(cls => cls._id === classId)
+      } else if (selectedClass) {
+        // If selectedClass is set (from main attendance view), use it
+        selectedClassData = classes.find(cls => cls.className === selectedClass)
+        targetClassId = selectedClassData?._id
+      } else {
+        setError('No class selected for attendance')
+        return
+      }
+
       const student = students.find(s => s._id === studentId)
       
       if (!selectedClassData || !student) {
@@ -291,8 +405,8 @@ function Attendance() {
       // Prepare attendance data according to CreateAttendanceDto
       const attendanceData = {
         studentId: studentId,
-        classId: selectedClassData._id,
-        schoolId: student.schoolId || 'default-school-id', // You might want to get this from user context
+        classId: targetClassId,
+        schoolId: student.schoolId || '68c547e28a9c12a9210a256f', // Use a real MongoDB ObjectId format
         date: attendanceDate,
         status: status,
         remarks: status === 'late' ? 'Late arrival' : status === 'excused' ? 'Excused absence' : ''
@@ -313,6 +427,7 @@ function Attendance() {
       }
 
       console.log('Attendance updated successfully:', response)
+      console.log('Setting student attendance to:', status, 'for student:', studentId)
 
       // Update local state
       const updatedAttendanceMap = {
@@ -323,14 +438,17 @@ function Attendance() {
           _id: response._id
         }
       }
+      console.log('Updated attendance map:', updatedAttendanceMap)
       setStudentAttendance(updatedAttendanceMap)
 
-      // Update attendance records
+      // Update attendance records - remove old record and add new one
       const updatedRecords = attendanceRecords.filter(record => 
         !(record.studentId === studentId && record.date === attendanceDate)
       )
       updatedRecords.push(response)
       setAttendanceRecords(updatedRecords)
+
+      setSuccess(`Student attendance updated to ${status}!`)
 
     } catch (error) {
       console.error('Attendance update error:', error)
@@ -366,7 +484,7 @@ function Attendance() {
       const attendanceRecords = classStudents.map(student => ({
         studentId: student._id,
         classId: selectedClassData._id,
-        schoolId: student.schoolId || 'default-school-id',
+        schoolId: student.schoolId || '68c547e28a9c12a9210a256f', // Use a real MongoDB ObjectId format
         date: attendanceDate,
         status: studentAttendance[student._id]?.status || 'absent',
         remarks: studentAttendance[student._id]?.remarks || ''
@@ -379,8 +497,8 @@ function Attendance() {
       
       setSuccess('Attendance saved successfully!')
       
-      // Reload attendance records
-      await loadAttendanceRecords()
+      // Reload attendance records to update the counts
+      await loadAllAttendanceRecords()
       
       // Navigate to success page after a short delay
       setTimeout(() => {
@@ -406,9 +524,142 @@ function Attendance() {
     }
   }
 
+  // Helper functions for students modal
+  const getClassName = (cls) => {
+    if (!cls) return 'Unknown Class'
+    if (typeof cls.className === 'object') {
+      return cls.className.name || cls.className._id || 'Unknown Class'
+    }
+    return cls.className || 'Unknown Class'
+  }
+
+  const getSubjectName = (cls) => {
+    if (!cls) return 'Unknown Subject'
+    if (typeof cls.subjectName === 'object') {
+      return cls.subjectName.name || cls.subjectName._id || 'Unknown Subject'
+    }
+    return cls.subjectName || 'Unknown Subject'
+  }
+
+  const getStudentName = (student) => {
+    if (!student) return 'Unknown Student'
+    if (typeof student.studentName === 'object') {
+      return student.studentName.name || student.studentName._id || 'Unknown Student'
+    }
+    return student.studentName || 'Unknown Student'
+  }
+
+  const getClassNameFromId = (classId) => {
+    if (!classId) return 'No Class'
+    if (typeof classId === 'object') {
+      return classId.className || classId.name || classId._id || 'Unknown Class'
+    }
+    // If it's a string ID, find the class name from classes array
+    const foundClass = classes.find(cls => cls._id === classId)
+    return foundClass ? foundClass.className : classId
+  }
+
+  const getSchoolId = (schoolId) => {
+    if (!schoolId) return null
+    if (typeof schoolId === 'object') {
+      return schoolId._id || schoolId.name || schoolId.id || 'Unknown School'
+    }
+    return schoolId
+  }
+
+  // Calculate attendance summary
+  const calculateAttendanceSummary = () => {
+    const summary = {
+      total: studentsInSelectedClass.length,
+      present: 0,
+      absent: 0,
+      late: 0,
+      excused: 0
+    }
+
+    studentsInSelectedClass.forEach(student => {
+      const status = studentAttendance[student._id]?.status || 'absent'
+      summary[status]++
+    })
+
+    setAttendanceSummary(summary)
+  }
+
+  // Bulk attendance actions
+  const markAllStudents = async (status) => {
+    if (!selectedClass) return
+
+    setLoading(true)
+    setError('')
+
+    try {
+      const selectedClassData = classes.find(cls => cls.className === selectedClass)
+      if (!selectedClassData) return
+
+      const promises = studentsInSelectedClass.map(async (student) => {
+        const attendanceData = {
+          studentId: student._id,
+          classId: selectedClassData._id,
+          schoolId: student.schoolId || '68c547e28a9c12a9210a256f', // Use a real MongoDB ObjectId format
+          date: attendanceDate,
+          status: status,
+          remarks: status === 'late' ? 'Late arrival' : status === 'excused' ? 'Excused absence' : ''
+        }
+
+        const existingRecord = attendanceRecords.find(record => 
+          record.studentId === student._id && record.date === attendanceDate
+        )
+
+        if (existingRecord) {
+          return await attendanceAPI.updateAttendance(existingRecord._id, attendanceData)
+        } else {
+          return await attendanceAPI.createAttendance(attendanceData)
+        }
+      })
+
+      const responses = await Promise.all(promises)
+      
+      // Update local state
+      const updatedAttendanceMap = {}
+      studentsInSelectedClass.forEach(student => {
+        updatedAttendanceMap[student._id] = {
+          status: status,
+          remarks: status === 'late' ? 'Late arrival' : status === 'excused' ? 'Excused absence' : '',
+          _id: responses.find(r => r.studentId === student._id)?._id
+        }
+      })
+      setStudentAttendance(updatedAttendanceMap)
+
+      // Update attendance records
+      const updatedRecords = attendanceRecords.filter(record => 
+        !(studentsInSelectedClass.some(student => 
+          student._id === record.studentId && record.date === attendanceDate
+        ))
+      )
+      updatedRecords.push(...responses)
+      setAttendanceRecords(updatedRecords)
+
+      setSuccess(`All students marked as ${status}!`)
+      calculateAttendanceSummary()
+
+    } catch (error) {
+      console.error('Bulk attendance error:', error)
+      setError('Failed to update attendance for all students')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const selectedClassData = classes.find(cls => cls.className === selectedClass)
   const studentsInSelectedClass = selectedClassData ? 
     students.filter(student => student.classId === selectedClassData._id) : []
+
+  // Update attendance summary when studentAttendance changes
+  useEffect(() => {
+    if (studentsInSelectedClass.length > 0) {
+      calculateAttendanceSummary()
+    }
+  }, [studentAttendance, studentsInSelectedClass])
 
   return (
     <div className='min-h-screen bg-slate-800 px-4 py-8'>
@@ -428,6 +679,416 @@ function Attendance() {
             {error}
           </div>
         )}
+
+        {/* Classes Overview */}
+        <div className="bg-slate-700 rounded-lg p-6 mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-white">Classes Overview</h3>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowCreateClassModal(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+              >
+                + Add Class
+              </button>
+              <button
+                onClick={() => setShowAddStudentModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+              >
+                + Add Student
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {classes.slice(0, 6).map(cls => {
+              const classStudents = students.filter(student => {
+                const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                return studentClassId === cls._id
+              })
+              const studentCount = classStudents.length
+              
+              return (
+                <div 
+                  key={cls._id} 
+                  className="bg-slate-600 rounded-lg p-4 hover:bg-slate-500 transition-colors"
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <h4 className="text-white font-medium">{getClassName(cls)}</h4>
+                      <p className="text-slate-300 text-sm">{getSubjectName(cls)}</p>
+                      <p className="text-slate-400 text-xs">Room: {cls.classRoom || 'N/A'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-slate-400 text-xs">ID: {cls._id}</p>
+                      <p className="text-slate-400 text-xs">{studentCount} students</p>
+                    </div>
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedClassForStudents(cls)
+                        setShowStudentsModal(true)
+                      }}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm transition-colors"
+                    >
+                      👥 View Students
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (studentCount > 0) {
+                          setSelectedClass(getClassName(cls))
+                          setSuccess(`Selected ${getClassName(cls)} for attendance!`)
+                        } else {
+                          setError('No students in this class. Add students first.')
+                        }
+                      }}
+                      disabled={studentCount === 0}
+                      className={`flex-1 px-3 py-2 rounded text-sm transition-colors ${
+                        studentCount > 0 
+                          ? 'bg-green-600 hover:bg-green-700 text-white' 
+                          : 'bg-gray-500 text-gray-300 cursor-not-allowed'
+                      }`}
+                    >
+                      📋 Take Attendance
+                    </button>
+                  </div>
+                  
+                  {/* Quick Stats */}
+                  {studentCount > 0 && (
+                    <div className="mt-3 pt-3 border-t border-slate-500">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400">Today's Attendance:</span>
+                        <span className="text-green-400">
+                          {(() => {
+                            const presentCount = attendanceRecords.filter(record => {
+                              const recordClassId = typeof record.classId === 'object' ? record.classId._id : record.classId
+                              return recordClassId === cls._id && record.date === attendanceDate && record.status === 'present'
+                            }).length
+                            return `${presentCount}/${studentCount}`
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            {classes.length === 0 && (
+              <div className="col-span-full text-center text-slate-400 py-8">
+                <p>No classes found. Create your first class!</p>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Date-Specific Attendance Summary */}
+        <div className="bg-slate-700 rounded-lg p-6 mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h3 className="text-xl font-semibold text-white">📊 Attendance for Specific Date</h3>
+              <p className="text-slate-400 text-sm mt-1">
+                Select a date to view attendance details for that specific day
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <label className='text-white text-sm font-medium'>Select Date:</label>
+              <input
+                type='date'
+                value={attendanceDate}
+                onChange={(e) => setAttendanceDate(e.target.value)}
+                className='px-4 py-2 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500'
+              />
+            </div>
+          </div>
+          
+          {/* Selected Date Display */}
+          <div className="bg-slate-600 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-white font-lg font-semibold">
+                  📅 {new Date(attendanceDate).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </h4>
+                <p className="text-slate-400 text-sm">
+                  Attendance records for this specific date
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-white">
+                  {(() => {
+                    const totalStudents = classes.reduce((total, cls) => {
+                      const classStudents = students.filter(student => {
+                        const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                        return studentClassId === cls._id
+                      })
+                      return total + classStudents.length
+                    }, 0)
+                    const presentStudents = attendanceRecords.filter(record => 
+                      record.date === attendanceDate && record.status === 'present'
+                    ).length
+                    return totalStudents > 0 ? Math.round((presentStudents / totalStudents) * 100) : 0
+                  })()}%
+                </div>
+                <div className="text-slate-400 text-sm">Overall Attendance</div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Per-Class Attendance for Selected Date */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {classes.map(cls => {
+              const classStudents = students.filter(student => {
+                const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                return studentClassId === cls._id
+              })
+              const studentCount = classStudents.length
+              
+              // Get attendance records for THIS SPECIFIC DATE
+              const dateAttendanceRecords = attendanceRecords.filter(record => {
+                const recordClassId = typeof record.classId === 'object' ? record.classId._id : record.classId
+                return recordClassId === cls._id && record.date === attendanceDate
+              })
+              
+              // Count students by status for THIS DATE
+              const presentCount = dateAttendanceRecords.filter(record => record.status === 'present').length
+              const absentCount = dateAttendanceRecords.filter(record => record.status === 'absent').length
+              const lateCount = dateAttendanceRecords.filter(record => record.status === 'late').length
+              const excusedCount = dateAttendanceRecords.filter(record => record.status === 'excused').length
+              
+              // Calculate attendance percentage for THIS DATE
+              const attendancePercentage = studentCount > 0 ? Math.round((presentCount / studentCount) * 100) : 0
+              
+              // Check if attendance was taken for this date
+              const attendanceTaken = dateAttendanceRecords.length > 0
+              
+              return (
+                <div 
+                  key={cls._id} 
+                  className={`rounded-lg p-4 transition-colors ${
+                    attendanceTaken 
+                      ? 'bg-slate-600 hover:bg-slate-500' 
+                      : 'bg-slate-800 border-2 border-dashed border-slate-600'
+                  }`}
+                >
+                  {/* Class Header */}
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex-1">
+                      <h4 className="text-white font-medium text-lg">{getClassName(cls)}</h4>
+                      <p className="text-slate-300 text-sm">{getSubjectName(cls)}</p>
+                      <p className="text-slate-400 text-xs">Room: {cls.classRoom || 'N/A'}</p>
+                    </div>
+                    <div className="text-right">
+                      {attendanceTaken ? (
+                        <div className={`px-3 py-1 rounded-full text-sm font-bold ${
+                          attendancePercentage >= 80 ? 'bg-green-600 text-white' :
+                          attendancePercentage >= 60 ? 'bg-yellow-600 text-white' :
+                          'bg-red-600 text-white'
+                        }`}>
+                          {attendancePercentage}%
+                        </div>
+                      ) : (
+                        <div className="px-3 py-1 rounded-full text-sm font-bold bg-gray-600 text-gray-300">
+                          No Data
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Date-Specific Attendance Stats */}
+                  <div className="space-y-2 mb-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 text-sm">Total Students:</span>
+                      <span className="text-white font-medium">{studentCount}</span>
+                    </div>
+                    
+                    {attendanceTaken ? (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-green-400 text-sm">✓ Present:</span>
+                          <span className="text-green-400 font-medium">{presentCount}</span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-red-400 text-sm">✗ Absent:</span>
+                          <span className="text-red-400 font-medium">{absentCount}</span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-yellow-400 text-sm">⏰ Late:</span>
+                          <span className="text-yellow-400 font-medium">{lateCount}</span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-blue-400 text-sm">📝 Excused:</span>
+                          <span className="text-blue-400 font-medium">{excusedCount}</span>
+                        </div>
+                        
+                        {/* Specific Date Summary */}
+                        <div className="mt-3 p-3 bg-slate-700 rounded-lg">
+                          <div className="text-center">
+                            <p className="text-white font-medium text-sm">
+                              On {new Date(attendanceDate).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                              })}:
+                            </p>
+                            <p className="text-green-400 font-bold text-lg">
+                              {presentCount}/{studentCount} Present
+                            </p>
+                            <p className="text-red-400 text-sm">
+                              {absentCount}/{studentCount} Absent
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-3 p-3 bg-slate-800 rounded-lg border border-slate-600">
+                        <div className="text-center">
+                          <p className="text-slate-400 text-sm">
+                            No attendance recorded for
+                          </p>
+                          <p className="text-slate-300 font-medium">
+                            {new Date(attendanceDate).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric', 
+                              year: 'numeric' 
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Progress Bar (only if attendance taken) */}
+                  {attendanceTaken && (
+                    <div className="mb-4">
+                      <div className="flex justify-between text-xs text-slate-400 mb-1">
+                        <span>Attendance Rate</span>
+                        <span>{presentCount}/{studentCount}</span>
+                      </div>
+                      <div className="w-full bg-slate-500 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full transition-all duration-300 ${
+                            attendancePercentage >= 80 ? 'bg-green-500' :
+                            attendancePercentage >= 60 ? 'bg-yellow-500' :
+                            'bg-red-500'
+                          }`}
+                          style={{ width: `${attendancePercentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Action Buttons */}
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedClassForStudents(cls)
+                        setShowStudentsModal(true)
+                      }}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm transition-colors"
+                    >
+                      👥 View Students
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (studentCount > 0) {
+                          setSelectedClass(getClassName(cls))
+                          setSuccess(`Selected ${getClassName(cls)} for attendance on ${new Date(attendanceDate).toLocaleDateString()}!`)
+                        } else {
+                          setError('No students in this class. Add students first.')
+                        }
+                      }}
+                      disabled={studentCount === 0}
+                      className={`flex-1 px-3 py-2 rounded text-sm transition-colors ${
+                        studentCount > 0 
+                          ? 'bg-green-600 hover:bg-green-700 text-white' 
+                          : 'bg-gray-500 text-gray-300 cursor-not-allowed'
+                      }`}
+                    >
+                      📋 Take Attendance
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          
+          {/* Overall Summary for Selected Date */}
+          <div className="mt-6 pt-6 border-t border-slate-500">
+            <h4 className="text-lg font-semibold text-white mb-4">
+              📈 Summary for {new Date(attendanceDate).toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </h4>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-slate-600 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-white">
+                  {classes.reduce((total, cls) => {
+                    const classStudents = students.filter(student => {
+                      const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                      return studentClassId === cls._id
+                    })
+                    return total + classStudents.length
+                  }, 0)}
+                </div>
+                <div className="text-slate-400 text-sm">Total Students</div>
+              </div>
+              
+              <div className="bg-green-600 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-white">
+                  {attendanceRecords.filter(record => 
+                    record.date === attendanceDate && record.status === 'present'
+                  ).length}
+                </div>
+                <div className="text-green-200 text-sm">Present on {new Date(attendanceDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+              </div>
+              
+              <div className="bg-red-600 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-white">
+                  {attendanceRecords.filter(record => 
+                    record.date === attendanceDate && record.status === 'absent'
+                  ).length}
+                </div>
+                <div className="text-red-200 text-sm">Absent on {new Date(attendanceDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+              </div>
+              
+              <div className="bg-blue-600 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-white">
+                  {(() => {
+                    const totalStudents = classes.reduce((total, cls) => {
+                      const classStudents = students.filter(student => {
+                        const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                        return studentClassId === cls._id
+                      })
+                      return total + classStudents.length
+                    }, 0)
+                    const presentStudents = attendanceRecords.filter(record => 
+                      record.date === attendanceDate && record.status === 'present'
+                    ).length
+                    return totalStudents > 0 ? Math.round((presentStudents / totalStudents) * 100) : 0
+                  })()}%
+                </div>
+                <div className="text-blue-200 text-sm">Attendance Rate</div>
+              </div>
+            </div>
+          </div>
+        </div>
         
         {/* Class Selection */}
         <div className='mb-8'>
@@ -494,6 +1155,62 @@ function Attendance() {
           </div>
         )}
 
+        {/* Attendance Summary */}
+        {attendanceDate && (
+          <div className='bg-slate-700 rounded-lg p-6 mb-6'>
+            <h2 className='text-xl font-semibold text-white mb-4'>
+              📊 Attendance Summary for {new Date(attendanceDate).toLocaleDateString()}
+              {selectedClass ? ` - ${selectedClass}` : ' - All Classes'}
+            </h2>
+            
+            <div className='grid grid-cols-2 md:grid-cols-5 gap-4'>
+              <div className='bg-slate-600 rounded-lg p-4 text-center'>
+                <div className='text-2xl font-bold text-white'>{attendanceSummary.total}</div>
+                <div className='text-slate-400 text-sm'>Total Records</div>
+              </div>
+              <div className='bg-green-600 rounded-lg p-4 text-center'>
+                <div className='text-2xl font-bold text-white'>{attendanceSummary.present}</div>
+                <div className='text-green-200 text-sm'>Present</div>
+              </div>
+              <div className='bg-red-600 rounded-lg p-4 text-center'>
+                <div className='text-2xl font-bold text-white'>{attendanceSummary.absent}</div>
+                <div className='text-red-200 text-sm'>Absent</div>
+              </div>
+              <div className='bg-yellow-600 rounded-lg p-4 text-center'>
+                <div className='text-2xl font-bold text-white'>{attendanceSummary.late}</div>
+                <div className='text-yellow-200 text-sm'>Late</div>
+              </div>
+              <div className='bg-blue-600 rounded-lg p-4 text-center'>
+                <div className='text-2xl font-bold text-white'>{attendanceSummary.excused}</div>
+                <div className='text-blue-200 text-sm'>Excused</div>
+              </div>
+            </div>
+            
+            {/* Show the exact format you want */}
+            <div className='mt-4 p-4 bg-slate-600 rounded-lg'>
+              <h3 className='text-lg font-semibold text-white mb-2'>Quick Summary</h3>
+              <div className='text-center'>
+                <p className='text-white text-lg'>
+                  <span className='text-green-400 font-bold'>{attendanceSummary.present}</span>/
+                  <span className='text-white font-bold'>{attendanceSummary.total}</span> Present
+                </p>
+                <p className='text-white text-lg'>
+                  <span className='text-red-400 font-bold'>{attendanceSummary.absent}</span>/
+                  <span className='text-white font-bold'>{attendanceSummary.total}</span> Absent
+                </p>
+                <p className='text-slate-400 text-sm mt-2'>
+                  On {new Date(attendanceDate).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Student Attendance List */}
         {selectedClass && studentsInSelectedClass.length > 0 && (
           <div className='bg-slate-700 rounded-lg p-6'>
@@ -501,6 +1218,7 @@ function Attendance() {
               <h2 className='text-xl font-semibold text-white'>
                 Mark Attendance - {selectedClass}
               </h2>
+              <div className='flex space-x-3'>
               <button
                 onClick={saveAttendance}
                 disabled={loading}
@@ -508,9 +1226,45 @@ function Attendance() {
               >
                 {loading ? 'Saving...' : 'Save Attendance'}
               </button>
+              </div>
             </div>
             
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            {/* Bulk Actions */}
+            <div className='bg-slate-600 rounded-lg p-4 mb-6'>
+              <h3 className='text-lg font-medium text-white mb-3'>Quick Actions</h3>
+              <div className='flex flex-wrap gap-2'>
+                <button
+                  onClick={() => markAllStudents('present')}
+                  disabled={loading}
+                  className='bg-green-500 hover:bg-green-600 disabled:bg-gray-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors'
+                >
+                  Mark All Present
+                </button>
+                <button
+                  onClick={() => markAllStudents('absent')}
+                  disabled={loading}
+                  className='bg-red-500 hover:bg-red-600 disabled:bg-gray-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors'
+                >
+                  Mark All Absent
+                </button>
+                <button
+                  onClick={() => markAllStudents('late')}
+                  disabled={loading}
+                  className='bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors'
+                >
+                  Mark All Late
+                </button>
+                <button
+                  onClick={() => markAllStudents('excused')}
+                  disabled={loading}
+                  className='bg-blue-500 hover:bg-blue-600 disabled:bg-gray-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors'
+                >
+                  Mark All Excused
+                </button>
+              </div>
+            </div>
+            
+            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
               {studentsInSelectedClass.map(student => {
                 const attendance = studentAttendance[student._id]
                 const status = attendance?.status || 'absent'
@@ -518,22 +1272,25 @@ function Attendance() {
                 return (
                   <div
                     key={student._id}
-                    className={`p-4 rounded-lg border-2 transition-all ${
+                    className={`p-4 rounded-lg border-2 transition-all hover:scale-105 ${
                       status === 'present'
-                        ? 'border-green-500 bg-green-500/20'
+                        ? 'border-green-500 bg-green-500/20 shadow-green-500/20'
                         : status === 'late'
-                        ? 'border-yellow-500 bg-yellow-500/20'
+                        ? 'border-yellow-500 bg-yellow-500/20 shadow-yellow-500/20'
                         : status === 'excused'
-                        ? 'border-blue-500 bg-blue-500/20'
-                        : 'border-red-500 bg-red-500/20'
+                        ? 'border-blue-500 bg-blue-500/20 shadow-blue-500/20'
+                        : 'border-red-500 bg-red-500/20 shadow-red-500/20'
                     }`}
                   >
                     <div className='flex items-center justify-between mb-3'>
-                      <div>
-                        <h3 className='font-semibold text-white'>{student.studentName}</h3>
+                      <div className='flex-1'>
+                        <h3 className='font-semibold text-white text-lg'>{student.studentName}</h3>
                         <p className='text-gray-300 text-sm'>ID: {student._id}</p>
+                        {student.schoolId && (
+                          <p className='text-gray-400 text-xs'>School: {student.schoolId}</p>
+                        )}
                       </div>
-                      <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      <div className={`px-3 py-1 rounded-full text-xs font-medium shadow-lg ${
                         status === 'present'
                           ? 'bg-green-500 text-white'
                           : status === 'late'
@@ -546,51 +1303,70 @@ function Attendance() {
                       </div>
                     </div>
                     
-                    <div className='flex space-x-2'>
+                    {/* Status Icon */}
+                    <div className='flex justify-center mb-3'>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        status === 'present'
+                          ? 'bg-green-500'
+                          : status === 'late'
+                          ? 'bg-yellow-500'
+                          : status === 'excused'
+                          ? 'bg-blue-500'
+                          : 'bg-red-500'
+                      }`}>
+                        <span className='text-white text-lg'>
+                          {status === 'present' ? '✓' : 
+                           status === 'late' ? '⏰' : 
+                           status === 'excused' ? '📝' : '✗'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className='grid grid-cols-2 gap-2'>
                       <button
                         onClick={() => toggleStudentAttendance(student._id, 'present')}
-                        className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                        className={`py-2 px-3 rounded text-sm font-medium transition-colors ${
                           status === 'present'
-                            ? 'bg-green-600 text-white'
-                            : 'bg-green-500 hover:bg-green-600 text-white'
+                            ? 'bg-green-600 text-white shadow-lg'
+                            : 'bg-green-500 hover:bg-green-600 text-white hover:shadow-lg'
                         }`}
                       >
-                        Present
+                        ✓ Present
                       </button>
                       <button
                         onClick={() => toggleStudentAttendance(student._id, 'late')}
-                        className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                        className={`py-2 px-3 rounded text-sm font-medium transition-colors ${
                           status === 'late'
-                            ? 'bg-yellow-600 text-white'
-                            : 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                            ? 'bg-yellow-600 text-white shadow-lg'
+                            : 'bg-yellow-500 hover:bg-yellow-600 text-white hover:shadow-lg'
                         }`}
                       >
-                        Late
+                        ⏰ Late
                       </button>
                       <button
                         onClick={() => toggleStudentAttendance(student._id, 'excused')}
-                        className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                        className={`py-2 px-3 rounded text-sm font-medium transition-colors ${
                           status === 'excused'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-blue-500 hover:bg-blue-600 text-white'
+                            ? 'bg-blue-600 text-white shadow-lg'
+                            : 'bg-blue-500 hover:bg-blue-600 text-white hover:shadow-lg'
                         }`}
                       >
-                        Excused
+                        📝 Excused
                       </button>
                       <button
                         onClick={() => toggleStudentAttendance(student._id, 'absent')}
-                        className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
+                        className={`py-2 px-3 rounded text-sm font-medium transition-colors ${
                           status === 'absent'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-red-500 hover:bg-red-600 text-white'
+                            ? 'bg-red-600 text-white shadow-lg'
+                            : 'bg-red-500 hover:bg-red-600 text-white hover:shadow-lg'
                         }`}
                       >
-                        Absent
+                        ✗ Absent
                       </button>
                     </div>
                     
                     {attendance?.remarks && (
-                      <div className='mt-2'>
+                      <div className='mt-3 p-2 bg-slate-600 rounded'>
                         <p className='text-gray-300 text-xs'>Remarks: {attendance.remarks}</p>
                       </div>
                     )}
@@ -740,6 +1516,348 @@ function Attendance() {
                   className='flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200'
                 >
                   {loading ? 'Adding...' : 'Add Student'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Students Modal */}
+        {showStudentsModal && selectedClassForStudents && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-slate-800 rounded-lg p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-2xl font-bold text-white">Students in Class</h3>
+                  <p className="text-slate-400 mt-1">
+                    {getClassName(selectedClassForStudents)} - {getSubjectName(selectedClassForStudents)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowStudentsModal(false)}
+                  className="text-slate-400 hover:text-white text-2xl"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              {/* Class Information */}
+              <div className="bg-slate-700 rounded-lg p-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-slate-400 text-sm">Class Name</p>
+                    <p className="text-white font-medium">{getClassName(selectedClassForStudents)}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 text-sm">Subject</p>
+                    <p className="text-white font-medium">{getSubjectName(selectedClassForStudents)}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 text-sm">Room</p>
+                    <p className="text-white font-medium">{selectedClassForStudents.classRoom || 'N/A'}</p>
+                  </div>
+                </div>
+                {selectedClassForStudents.classCredit && (
+                  <div className="mt-4">
+                    <p className="text-slate-400 text-sm">Credits</p>
+                    <p className="text-white font-medium">{selectedClassForStudents.classCredit}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Students List */}
+              <div className="bg-slate-700 rounded-lg p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-lg font-semibold text-white">
+                    Students ({students.filter(student => {
+                      const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                      return studentClassId === selectedClassForStudents._id
+                    }).length})
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setShowStudentsModal(false)
+                      setShowAddStudentModal(true)
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+                  >
+                    <span className="mr-2">+</span>
+                    Add Student to Class
+                  </button>
+                </div>
+
+                {/* Quick Attendance Actions */}
+                <div className="bg-slate-600 rounded-lg p-4 mb-6">
+                  <h5 className="text-md font-medium text-white mb-3">Quick Attendance Actions</h5>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        const classStudents = students.filter(student => {
+                          const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                          return studentClassId === selectedClassForStudents._id
+                        })
+                        classStudents.forEach(student => {
+                          toggleStudentAttendance(student._id, 'present', selectedClassForStudents._id)
+                        })
+                      }}
+                      className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors"
+                    >
+                      ✓ Mark All Present
+                    </button>
+                    <button
+                      onClick={() => {
+                        const classStudents = students.filter(student => {
+                          const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                          return studentClassId === selectedClassForStudents._id
+                        })
+                        classStudents.forEach(student => {
+                          toggleStudentAttendance(student._id, 'absent', selectedClassForStudents._id)
+                        })
+                      }}
+                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors"
+                    >
+                      ✗ Mark All Absent
+                    </button>
+                    <button
+                      onClick={() => {
+                        const classStudents = students.filter(student => {
+                          const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                          return studentClassId === selectedClassForStudents._id
+                        })
+                        classStudents.forEach(student => {
+                          toggleStudentAttendance(student._id, 'late', selectedClassForStudents._id)
+                        })
+                      }}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors"
+                    >
+                      ⏰ Mark All Late
+                    </button>
+                    <button
+                      onClick={() => {
+                        const classStudents = students.filter(student => {
+                          const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                          return studentClassId === selectedClassForStudents._id
+                        })
+                        classStudents.forEach(student => {
+                          toggleStudentAttendance(student._id, 'excused', selectedClassForStudents._id)
+                        })
+                      }}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors"
+                    >
+                      📝 Mark All Excused
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {students
+                    .filter(student => {
+                      const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                      return studentClassId === selectedClassForStudents._id
+                    })
+                    .map(student => {
+                      const schoolId = getSchoolId(student.schoolId)
+                      return (
+                        <div key={student._id} className="bg-slate-600 rounded-lg p-4 hover:bg-slate-500 transition-colors">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex-1">
+                              <h5 className="text-white font-medium text-lg">{getStudentName(student)}</h5>
+                              <p className="text-slate-300 text-sm">Student ID: {student._id}</p>
+                              {schoolId && (
+                                <p className="text-slate-400 text-xs mt-1">School ID: {schoolId}</p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <span className="bg-blue-600 text-white px-2 py-1 rounded-full text-xs">
+                                Active
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Student Details */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400 text-sm">Class:</span>
+                              <span className="text-white text-sm">{getClassNameFromId(student.classId)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400 text-sm">Enrolled:</span>
+                              <span className="text-white text-sm">
+                                {new Date(student.createdAt || student.date || Date.now()).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Attendance Status */}
+                          <div className="mt-3 mb-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-slate-400 text-sm">Today's Attendance:</span>
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                studentAttendance[student._id]?.status === 'present' ? 'bg-green-600 text-white' :
+                                studentAttendance[student._id]?.status === 'late' ? 'bg-yellow-600 text-white' :
+                                studentAttendance[student._id]?.status === 'excused' ? 'bg-blue-600 text-white' :
+                                'bg-red-600 text-white'
+                              }`}>
+                                {(studentAttendance[student._id]?.status || 'absent').toUpperCase()}
+                              </span>
+                            </div>
+                            
+                            {/* Attendance Buttons */}
+                            <div className="grid grid-cols-2 gap-1">
+                              <button
+                                onClick={() => toggleStudentAttendance(student._id, 'present', selectedClassForStudents._id)}
+                                className={`py-1 px-2 rounded text-xs font-medium transition-colors ${
+                                  studentAttendance[student._id]?.status === 'present'
+                                    ? 'bg-green-600 text-white'
+                                    : 'bg-green-500 hover:bg-green-600 text-white'
+                                }`}
+                              >
+                                ✓ Present
+                              </button>
+                              <button
+                                onClick={() => toggleStudentAttendance(student._id, 'late', selectedClassForStudents._id)}
+                                className={`py-1 px-2 rounded text-xs font-medium transition-colors ${
+                                  studentAttendance[student._id]?.status === 'late'
+                                    ? 'bg-yellow-600 text-white'
+                                    : 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                }`}
+                              >
+                                ⏰ Late
+                              </button>
+                              <button
+                                onClick={() => toggleStudentAttendance(student._id, 'excused', selectedClassForStudents._id)}
+                                className={`py-1 px-2 rounded text-xs font-medium transition-colors ${
+                                  studentAttendance[student._id]?.status === 'excused'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                }`}
+                              >
+                                📝 Excused
+                              </button>
+                              <button
+                                onClick={() => toggleStudentAttendance(student._id, 'absent', selectedClassForStudents._id)}
+                                className={`py-1 px-2 rounded text-xs font-medium transition-colors ${
+                                  studentAttendance[student._id]?.status === 'absent'
+                                    ? 'bg-red-600 text-white'
+                                    : 'bg-red-500 hover:bg-red-600 text-white'
+                                }`}
+                              >
+                                ✗ Absent
+                              </button>
+                            </div>
+                          </div>
+                          
+                          {/* Action Buttons */}
+                          <div className="flex space-x-2 mt-3">
+                            <button
+                              onClick={() => {
+                                // Set this class as selected for attendance
+                                setSelectedClass(getClassName(selectedClassForStudents))
+                                setShowStudentsModal(false)
+                              }}
+                              className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-sm transition-colors"
+                            >
+                              📋 Full Attendance
+                            </button>
+                            <button
+                              onClick={() => {
+                                // You can add functionality to edit student
+                                console.log('Edit student:', student)
+                              }}
+                              className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded text-sm transition-colors"
+                            >
+                              ✏️ Edit
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+                
+                {/* No Students Message */}
+                {students.filter(student => {
+                  const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                  return studentClassId === selectedClassForStudents._id
+                }).length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="text-slate-400 text-6xl mb-4">👥</div>
+                    <h4 className="text-xl font-medium text-white mb-2">No Students Found</h4>
+                    <p className="text-slate-400 mb-6">This class doesn't have any students yet.</p>
+                    <button
+                      onClick={() => {
+                        setShowStudentsModal(false)
+                        setShowAddStudentModal(true)
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+                    >
+                      Add First Student
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {/* Class Statistics */}
+              <div className="bg-slate-700 rounded-lg p-6 mt-6">
+                <h4 className="text-lg font-semibold text-white mb-4">Class Statistics</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-slate-600 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-white">
+                      {students.filter(student => {
+                        const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                        return studentClassId === selectedClassForStudents._id
+                      }).length}
+                    </div>
+                    <div className="text-slate-400 text-sm">Total Students</div>
+                  </div>
+                  
+                  <div className="bg-slate-600 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-white">
+                      {attendanceRecords.filter(record => {
+                        const recordClassId = typeof record.classId === 'object' ? record.classId._id : record.classId
+                        return recordClassId === selectedClassForStudents._id
+                      }).length}
+                    </div>
+                    <div className="text-slate-400 text-sm">Attendance Records</div>
+                  </div>
+                  
+                  <div className="bg-slate-600 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-white">
+                      {attendanceRecords.filter(record => {
+                        const recordClassId = typeof record.classId === 'object' ? record.classId._id : record.classId
+                        return recordClassId === selectedClassForStudents._id && record.status === 'present'
+                      }).length}
+                    </div>
+                    <div className="text-slate-400 text-sm">Present Days</div>
+                  </div>
+                  
+                  <div className="bg-slate-600 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-white">
+                      {attendanceRecords.filter(record => {
+                        const recordClassId = typeof record.classId === 'object' ? record.classId._id : record.classId
+                        return recordClassId === selectedClassForStudents._id && record.status === 'absent'
+                      }).length}
+                    </div>
+                    <div className="text-slate-400 text-sm">Absent Days</div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Footer Actions */}
+              <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-slate-600">
+                <button
+                  onClick={() => setShowStudentsModal(false)}
+                  className="px-6 py-2 text-slate-400 hover:text-white transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedClass(getClassName(selectedClassForStudents))
+                    setShowStudentsModal(false)
+                  }}
+                  className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                >
+                  Take Attendance for This Class
                 </button>
               </div>
             </div>
