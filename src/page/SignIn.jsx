@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { signin } from '../api/auth'
+import { setUser } from '../utils/auth'
 import logo from '../assets/logo_reb.png'
 
 function SignIn() {
@@ -36,6 +37,19 @@ function SignIn() {
       if (response.token) {
         localStorage.setItem('token', response.token)
         console.log('Token stored in localStorage')
+      }
+      
+      // Store user data including role
+      if (response.user) {
+        setUser(response.user)
+        console.log('User data stored:', response.user)
+      } else if (response.role) {
+        // If backend only returns role, create user object
+        setUser({ 
+          username: formData.username, 
+          role: response.role 
+        })
+        console.log('User role stored:', response.role)
       }
       
       // Navigate to comment page

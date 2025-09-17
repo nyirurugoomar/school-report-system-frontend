@@ -6,6 +6,7 @@ import MainLayout from './layouts/MainLayout'
 import Attendance from './page/Attendance'
 import Success from './page/Success'
 import Admin from './page/Admin'
+import ProtectedRoute from './components/ProtectedRoute'
 function App() {
   return (
     <>
@@ -19,7 +20,11 @@ function App() {
         <Route path='/main' element={<MainLayout />}>
           <Route path='comment' element={<Comment />} />
           <Route path='attendance' element={<Attendance />} />
-          <Route path='admin' element={<Admin />} />
+          <Route path='admin' element={
+          <ProtectedRoute requiredRole="admin" fallbackPath="comment">
+            <Admin />
+          </ProtectedRoute>
+        } />
         </Route>
         
         {/* Direct routes with MainLayout */}
@@ -30,7 +35,11 @@ function App() {
           <Route index element={<Attendance />} />
         </Route>
         <Route path='/admin' element={<MainLayout />}>
-          <Route index element={<Admin />} />
+          <Route index element={
+            <ProtectedRoute requiredRole="admin" fallbackPath="/comment">
+              <Admin />
+            </ProtectedRoute>
+          } />
         </Route>
         {/* <Route path='/schedule' element={<MainLayout />}>
           <Route index element={<div className='px-4 py-8'><h1 className='text-4xl font-bold text-white text-center'>Schedule Page</h1></div>} />

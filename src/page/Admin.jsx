@@ -6,6 +6,28 @@ import * as commentAPI from '../api/comment'
 import * as attendanceAPI from '../api/attendance'
 import * as analyticsAPI from '../api/analytics'
 import * as reportsAPI from '../api/reports'
+import { 
+  createAdmin,
+  getAdminDashboard,
+  getAllClassesAdmin,
+  getClassDetailsAdmin,
+  getClassStudentsAdmin,
+  getClassAttendanceAdmin,
+  getAllStudentsAdmin,
+  getStudentDetailsAdmin,
+  getStudentAttendanceAdmin,
+  getAllAttendanceAdmin,
+  getAttendanceStatsAdmin,
+  getAttendanceByDateAdmin,
+  getAllUsersAdmin,
+  getUserDetailsAdmin,
+  getAnalyticsOverviewAdmin,
+  getClassPerformanceAnalyticsAdmin,
+  getAttendanceTrendsAnalyticsAdmin,
+  getAttendanceReportAdmin,
+  getClassPerformanceReportAdmin,
+  getStudentPerformanceReportAdmin
+} from '../api/auth'
 
 function Admin() {
   const navigate = useNavigate()
@@ -14,6 +36,7 @@ function Admin() {
   const [students, setStudents] = useState([])
   const [comments, setComments] = useState([])
   const [attendanceRecords, setAttendanceRecords] = useState([])
+  const [users, setUsers] = useState([])
   const [dashboardStats, setDashboardStats] = useState(null)
   const [classPerformance, setClassPerformance] = useState([])
   const [attendanceTrends, setAttendanceTrends] = useState([])
@@ -38,6 +61,7 @@ function Admin() {
   // Create modal states
   const [showCreateClassModal, setShowCreateClassModal] = useState(false)
   const [showCreateStudentModal, setShowCreateStudentModal] = useState(false)
+  const [showCreateAdminModal, setShowCreateAdminModal] = useState(false)
   
   // Form states
   const [newClass, setNewClass] = useState({
@@ -53,6 +77,13 @@ function Admin() {
     schoolId: ''
   })
 
+  const [newAdmin, setNewAdmin] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  })
+
   useEffect(() => {
     loadDashboardData()
   }, [])
@@ -62,33 +93,47 @@ function Admin() {
     setError('')
     
     try {
-      // Load all data in parallel
+      // Load all admin data in parallel using admin-specific APIs
       const [
         classesData,
         studentsData,
         commentsData,
         attendanceData,
         dashboardData,
-        classPerfData
+        classPerfData,
+        attendanceStatsData,
+        usersData
       ] = await Promise.all([
-        classAPI.getClasses(),
-        studentAPI.getStudents(),
-        commentAPI.getComments(),
-        attendanceAPI.getAttendanceRecords(),
-        analyticsAPI.getDashboardStats(),
-        analyticsAPI.getClassPerformance()
+        getAllClassesAdmin(),
+        getAllStudentsAdmin(),
+        commentAPI.getComments(), // Keep using regular API for comments
+        getAllAttendanceAdmin(),
+        getAdminDashboard(),
+        getClassPerformanceAnalyticsAdmin(),
+        getAttendanceStatsAdmin(),
+        getAllUsersAdmin()
       ])
 
       setClasses(classesData || [])
       setStudents(studentsData || [])
       setComments(commentsData || [])
       setAttendanceRecords(attendanceData || [])
+      setUsers(usersData || [])
       setDashboardStats(dashboardData)
       setClassPerformance(classPerfData || [])
       
+      // Store additional admin data
+      console.log('Admin dashboard loaded successfully:', {
+        classes: classesData?.length || 0,
+        students: studentsData?.length || 0,
+        attendance: attendanceData?.length || 0,
+        users: usersData?.length || 0,
+        stats: attendanceStatsData
+      })
+      
     } catch (err) {
-      console.error('Error loading dashboard data:', err)
-      setError('Failed to load dashboard data')
+      console.error('Error loading admin dashboard data:', err)
+      setError('Failed to load admin dashboard data')
     } finally {
       setLoading(false)
     }
@@ -98,13 +143,28 @@ function Admin() {
     if (!dateRange.startDate || !dateRange.endDate) return
     
     try {
-      const trends = await analyticsAPI.getAttendanceTrends(
-        dateRange.startDate,
-        dateRange.endDate
-      )
+      let trends = []
+      
+      if (selectedClass) {
+        // Load attendance trends for specific class
+        console.log('Loading attendance trends for class:', selectedClass)
+        const classAttendance = await getClassAttendanceAdmin(selectedClass)
+        trends = classAttendance || []
+        console.log('Class attendance data:', trends)
+      } else {
+        // Load general attendance trends
+        console.log('Loading general attendance trends')
+        trends = await getAttendanceTrendsAnalyticsAdmin(
+          dateRange.startDate,
+          dateRange.endDate
+        )
+        console.log('General trends data:', trends)
+      }
+      
       setAttendanceTrends(trends || [])
     } catch (err) {
       console.error('Error loading attendance trends:', err)
+      setError('Failed to load attendance trends')
     }
   }
 
@@ -145,6 +205,67 @@ function Admin() {
     } catch (err) {
       console.error('Error creating student:', err)
       setError('Failed to create student')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateAdmin = async () => {
+    // Validation
+    if (!newAdmin.username.trim() || !newAdmin.email.trim() || !newAdmin.password.trim()) {
+      setError('Please fill in all required fields')
+      return
+    }
+
+    if (newAdmin.password !== newAdmin.confirmPassword) {
+
+
+
+      setError('Passwords do not match')
+      return
+    }
+
+    if (newAdmin.password.length < 6) {
+      setError('Password must be at least 6 characters long')
+      return
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(newAdmin.email)) {
+      setError('Please enter a valid email address')
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError('')
+      
+      const adminData = {
+        username: newAdmin.username.trim(),
+        email: newAdmin.email.trim(),
+        password: newAdmin.password,
+        confirmPassword: newAdmin.confirmPassword
+      }
+
+      const response = await createAdmin(adminData)
+      console.log('Admin created successfully:', response)
+      
+      // Reset form
+      setNewAdmin({
+        username: '',
+        email: '',
+        password: '',
+        confirmPassword: ''
+      })
+      setShowCreateAdminModal(false)
+      
+      // Show success message (you can add a success state if needed)
+      alert('Admin user created successfully!')
+      
+    } catch (err) {
+      console.error('Error creating admin:', err)
+      setError(err.response?.data?.message || 'Failed to create admin user')
     } finally {
       setLoading(false)
     }
@@ -196,15 +317,6 @@ function Admin() {
     return schoolId
   }
 
-  // Helper function to safely get student name
-  const getStudentName = (student) => {
-    if (!student) return 'Unknown Student'
-    if (typeof student.studentName === 'object') {
-      return student.studentName.name || student.studentName._id || 'Unknown Student'
-    }
-    return student.studentName || 'Unknown Student'
-  }
-
   // Helper function to safely get class name
   const getClassName = (cls) => {
     if (!cls) return 'Unknown Class'
@@ -223,6 +335,17 @@ function Admin() {
     return cls.subjectName || 'Unknown Subject'
   }
 
+  // Helper function to safely get student name
+  const getStudentName = (studentId) => {
+    if (!studentId) return 'Unknown Student'
+    if (typeof studentId === 'object') {
+      return studentId.studentName || studentId.name || studentId._id || 'Unknown Student'
+    }
+    // If it's a string ID, find the student name from students array
+    const foundStudent = students.find(student => student._id === studentId)
+    return foundStudent ? (foundStudent.studentName || foundStudent.name || studentId) : studentId
+  }
+
   const filteredComments = comments.filter(comment => {
     if (selectedClass && comment.className !== selectedClass) return false
     return true
@@ -238,8 +361,9 @@ function Admin() {
   const tabs = [
     { id: 'overview', name: 'Overview', icon: '📊' },
     { id: 'comments', name: 'Comments', icon: '💬' },
-    { id: 'attendance', name: 'Attendance', icon: '��' },
-    { id: 'reports', name: 'Reports', icon: '📊' }
+    { id: 'attendance', name: 'Attendance', icon: '📋' },
+    { id: 'reports', name: 'Reports', icon: '📊' },
+    { id: 'admin-management', name: 'Admin Management', icon: '👑' }
   ]
 
   if (loading) {
@@ -645,7 +769,7 @@ function Admin() {
                 onClick={loadAttendanceTrends}
                 className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
               >
-                Load Trends
+                {selectedClass ? `Load Trends for ${getClassNameFromId(selectedClass)}` : 'Load All Trends'}
               </button>
             </div>
 
@@ -657,8 +781,8 @@ function Admin() {
                   <div key={record._id} className="bg-slate-600 rounded-lg p-4 cursor-pointer hover:bg-slate-500 transition-colors" onClick={() => openAttendanceModal(record)}>
                     <div className="flex justify-between items-center">
                       <div>
-                        <h4 className="text-white font-medium">{record.studentId}</h4>
-                        <p className="text-slate-300 text-sm">Class: {record.classId}</p>
+                        <h4 className="text-white font-medium">{getStudentName(record.studentId)}</h4>
+                        <p className="text-slate-300 text-sm">Class: {getClassNameFromId(record.classId)}</p>
                         {record.remarks && (
                           <p className="text-slate-400 text-xs mt-1">{record.remarks}</p>
                         )}
@@ -679,6 +803,49 @@ function Admin() {
                 ))}
               </div>
             </div>
+
+            {/* Attendance Trends Display */}
+            {attendanceTrends.length > 0 && (
+              <div className="bg-slate-700 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">
+                  📈 Attendance Trends {selectedClass ? `for ${getClassNameFromId(selectedClass)}` : '(All Classes)'}
+                </h3>
+                <div className="space-y-4">
+                  {attendanceTrends.map((trend, index) => (
+                    <div key={trend._id || index} className="bg-slate-600 rounded-lg p-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h4 className="text-white font-medium">
+                            {trend.date ? new Date(trend.date).toLocaleDateString() : `Trend ${index + 1}`}
+                          </h4>
+                          {trend.className && (
+                            <p className="text-slate-300 text-sm">Class: {trend.className}</p>
+                          )}
+                          {trend.studentName && (
+                            <p className="text-slate-300 text-sm">Student: {trend.studentName}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            trend.status === 'present' ? 'bg-green-600 text-white' :
+                            trend.status === 'absent' ? 'bg-red-600 text-white' :
+                            trend.status === 'late' ? 'bg-yellow-600 text-white' :
+                            'bg-gray-600 text-white'
+                          }`}>
+                            {trend.status || 'Unknown'}
+                          </span>
+                          {trend.attendanceRate && (
+                            <p className="text-slate-400 text-sm mt-1">
+                              Rate: {trend.attendanceRate}%
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -689,7 +856,19 @@ function Admin() {
               <h3 className="text-lg font-semibold text-white mb-4">Generate Reports</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <button
-                  onClick={() => {/* Generate attendance report */}}
+                  onClick={async () => {
+                    try {
+                      const report = await getAttendanceReportAdmin(
+                        new Date().toISOString().split('T')[0], // start date
+                        new Date().toISOString().split('T')[0]  // end date
+                      )
+                      console.log('Attendance report generated:', report)
+                      alert('Attendance report generated successfully!')
+                    } catch (error) {
+                      console.error('Error generating attendance report:', error)
+                      alert('Failed to generate attendance report')
+                    }
+                  }}
                   className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
@@ -700,18 +879,36 @@ function Admin() {
                 </button>
                 
                 <button
-                  onClick={() => {/* Generate class report */}}
+                  onClick={async () => {
+                    try {
+                      const report = await getClassPerformanceReportAdmin()
+                      console.log('Class performance report generated:', report)
+                      alert('Class performance report generated successfully!')
+                    } catch (error) {
+                      console.error('Error generating class performance report:', error)
+                      alert('Failed to generate class performance report')
+                    }
+                  }}
                   className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
-                    <span className="text-2xl mb-2 block">��</span>
+                    <span className="text-2xl mb-2 block">📊</span>
                     <h4 className="font-medium">Class Report</h4>
                     <p className="text-sm text-green-200 mt-1">Generate class performance</p>
                   </div>
                 </button>
                 
                 <button
-                  onClick={() => {/* Generate student report */}}
+                  onClick={async () => {
+                    try {
+                      const report = await getStudentPerformanceReportAdmin()
+                      console.log('Student performance report generated:', report)
+                      alert('Student performance report generated successfully!')
+                    } catch (error) {
+                      console.error('Error generating student performance report:', error)
+                      alert('Failed to generate student performance report')
+                    }
+                  }}
                   className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
@@ -720,6 +917,112 @@ function Admin() {
                     <p className="text-sm text-purple-200 mt-1">Generate student performance</p>
                   </div>
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'admin-management' && (
+          <div className="space-y-6">
+            {/* System Overview */}
+            <div className="bg-slate-700 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">📊 System Overview</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-slate-600 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-white">{classes.length}</div>
+                  <div className="text-slate-400 text-sm">Total Classes</div>
+                </div>
+                <div className="bg-green-600 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-white">{students.length}</div>
+                  <div className="text-green-200 text-sm">Total Students</div>
+                </div>
+                <div className="bg-blue-600 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-white">{users.length}</div>
+                  <div className="text-blue-200 text-sm">Total Users</div>
+                </div>
+                <div className="bg-purple-600 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-white">{attendanceRecords.length}</div>
+                  <div className="text-purple-200 text-sm">Attendance Records</div>
+                </div>
+              </div>
+            </div>
+
+            {/* User Management */}
+            <div className="bg-slate-700 rounded-lg p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-semibold text-white">👥 User Management</h3>
+                <button
+                  onClick={() => setShowCreateAdminModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <span>➕</span>
+                  <span>Create Admin</span>
+                </button>
+              </div>
+              
+              {/* Users List */}
+              <div className="bg-slate-600 rounded-lg p-4 mb-4">
+                <h4 className="text-white font-medium mb-3">System Users ({users.length})</h4>
+                {users.length > 0 ? (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {users.map((user, index) => (
+                      <div key={user._id || index} className="bg-slate-500 rounded p-3 flex justify-between items-center">
+                        <div>
+                          <div className="text-white font-medium">{user.username || user.email}</div>
+                          <div className="text-slate-300 text-sm">{user.email}</div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            user.role === 'admin' 
+                              ? 'bg-red-600 text-red-100' 
+                              : 'bg-slate-500 text-slate-300'
+                          }`}>
+                            {user.role || 'user'}
+                          </span>
+                          <button className="text-slate-400 hover:text-white text-sm">
+                            View Details
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-slate-400 text-center py-4">No users found</div>
+                )}
+              </div>
+              
+              <div className="bg-slate-600 rounded-lg p-4">
+                <h4 className="text-white font-medium mb-3">👑 Admin User Creation</h4>
+                <p className="text-slate-300 text-sm mb-4">
+                  Create new admin users who will have full access to the system. 
+                  Admin users can manage classes, students, attendance, and create other admin accounts.
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="bg-slate-500 rounded p-3">
+                    <h5 className="text-white font-medium mb-2">🔐 Admin Privileges</h5>
+                    <ul className="text-slate-300 space-y-1">
+                      <li>• Full system access</li>
+                      <li>• Create/edit classes</li>
+                      <li>• Manage students</li>
+                      <li>• View all attendance</li>
+                      <li>• Generate reports</li>
+                      <li>• Create other admins</li>
+                      <li>• Access admin APIs</li>
+                    </ul>
+                  </div>
+                  
+                  <div className="bg-slate-500 rounded p-3">
+                    <h5 className="text-white font-medium mb-2">⚠️ Security Notes</h5>
+                    <ul className="text-slate-300 space-y-1">
+                      <li>• Use strong passwords</li>
+                      <li>• Verify email addresses</li>
+                      <li>• Only create trusted users</li>
+                      <li>• Monitor admin activity</li>
+                      <li>• Regular security audits</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -870,6 +1173,90 @@ function Admin() {
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
               >
                 Add Student
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Admin Modal */}
+      {showCreateAdminModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white">Create Admin User</h3>
+              <button
+                onClick={() => setShowCreateAdminModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-slate-300 text-sm font-medium mb-2">Username *</label>
+                <input
+                  type="text"
+                  value={newAdmin.username}
+                  onChange={(e) => setNewAdmin({...newAdmin, username: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., admin_user"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-slate-300 text-sm font-medium mb-2">Email *</label>
+                <input
+                  type="email"
+                  value={newAdmin.email}
+                  onChange={(e) => setNewAdmin({...newAdmin, email: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., admin@school.com"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-slate-300 text-sm font-medium mb-2">Password *</label>
+                <input
+                  type="password"
+                  value={newAdmin.password}
+                  onChange={(e) => setNewAdmin({...newAdmin, password: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Minimum 6 characters"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-slate-300 text-sm font-medium mb-2">Confirm Password *</label>
+                <input
+                  type="password"
+                  value={newAdmin.confirmPassword}
+                  onChange={(e) => setNewAdmin({...newAdmin, confirmPassword: e.target.value})}
+                  className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Re-enter password"
+                />
+              </div>
+              
+              {error && (
+                <div className="bg-red-500/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowCreateAdminModal(false)}
+                className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateAdmin}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Create Admin
               </button>
             </div>
           </div>

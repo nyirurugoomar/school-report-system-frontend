@@ -1,5 +1,6 @@
 import React from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { clearUser, isAdmin } from '../utils/auth'
 import logo from '../assets/logo_reb.png'
 function Navbar() {
   const location = useLocation()
@@ -13,10 +14,8 @@ function Navbar() {
   // Logout functionality
   const handleLogout = () => {
     try {
-      // Clear any stored authentication data
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      sessionStorage.clear()
+      // Clear all authentication data using utility function
+      clearUser()
       
       // Redirect to sign in page
       navigate('/signin')
@@ -58,7 +57,18 @@ function Navbar() {
         >
           Attendance
         </Link>
-        
+        {isAdmin() && (
+          <Link 
+            to="/admin" 
+            className={`px-4 py-2 rounded-md transition-colors ${
+              isActive('/admin') 
+                ? 'bg-slate-700 text-white' 
+                : 'text-gray-300 hover:text-white'
+            }`}
+          >
+            Admin
+          </Link>
+        )}
       </div>
       
       {/* Right side - Logout button */}
