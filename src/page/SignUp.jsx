@@ -63,7 +63,7 @@ function SignUp() {
         )}
 
         <div className='space-y-2'>
-          <label className='block text-white text-sm font-medium'>Full Name</label>
+          <label className='block text-white text-sm font-medium'>Username</label>
           <input 
             type="text" 
             name="username"
