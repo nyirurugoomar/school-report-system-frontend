@@ -6,6 +6,7 @@ import * as classAPI from '../api/class'
 function Comment() {
   const navigate = useNavigate()
   const [formData, setFormData] = useState({
+    schoolId: '',
     className: '',
     subjectName: '',
     numberOfStudents: '',
@@ -18,6 +19,7 @@ function Comment() {
   const [success, setSuccess] = useState('')
   const [classes, setClasses] = useState([])
   const [subjects, setSubjects] = useState([])
+  const [availableSchools, setAvailableSchools] = useState([])
   const [loadingData, setLoadingData] = useState(true)
 
   // Load classes and extract subjects on component mount
@@ -28,6 +30,8 @@ function Comment() {
   const loadClassesAndSubjects = async () => {
     try {
       setLoadingData(true)
+      
+      // Load classes
       const classesData = await classAPI.getClasses()
       setClasses(classesData)
       
@@ -35,10 +39,16 @@ function Comment() {
       const uniqueSubjects = [...new Set(classesData.map(cls => cls.subjectName).filter(Boolean))]
       setSubjects(uniqueSubjects)
       
+      // Load available schools for comments
+      const schoolsResponse = await commentAPI.getAvailableSchools()
+      const schools = schoolsResponse?.data || schoolsResponse || []
+      setAvailableSchools(schools)
+      
       console.log('Loaded classes:', classesData)
       console.log('Extracted subjects:', uniqueSubjects)
+      console.log('Available schools:', schools)
     } catch (error) {
-      console.error('Error loading classes:', error)
+      console.error('Error loading data:', error)
       // Fallback to mock data if API fails
       const mockClasses = [
         { _id: '1', className: 'Mathematics 101', subjectName: 'Mathematics', classRoom: 'Room 101', classCredit: '3' },
@@ -49,6 +59,7 @@ function Comment() {
       ]
       setClasses(mockClasses)
       setSubjects(['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English'])
+      setAvailableSchools([])
     } finally {
       setLoadingData(false)
     }
@@ -82,6 +93,11 @@ function Comment() {
     console.log('Form submitted with data:', formData)
 
     // Validation
+    if (!formData.schoolId) {
+      setError('Please select a school')
+      setLoading(false)
+      return
+    }
     if (!formData.className) {
       setError('Please select a class')
       setLoading(false)
@@ -100,6 +116,7 @@ function Comment() {
 
     try {
       const commentData = {
+        schoolId: formData.schoolId,
         className: formData.className,
         subjectName: formData.subjectName,
         numberOfStudents: parseInt(formData.numberOfStudents),
@@ -116,6 +133,7 @@ function Comment() {
       setSuccess('Comment submitted successfully!')
       
       setFormData({
+        schoolId: '',
         className: '',
         subjectName: '',
         numberOfStudents: '',
@@ -168,12 +186,38 @@ function Comment() {
           <div className='bg-blue-500/20 border border-blue-500 text-blue-400 px-4 py-3 rounded-lg text-sm mb-6'>
             <div className="flex items-center space-x-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-              <span>Loading classes and subjects...</span>
+              <span>Loading schools, classes and subjects...</span>
             </div>
           </div>
         )}
         
         <form onSubmit={handleSubmit} className='w-full space-y-6'>
+          <div className='space-y-2'>
+            <label className='block text-white text-sm font-medium'>Select School *</label>
+            <select 
+              name="schoolId"
+              value={formData.schoolId}
+              onChange={handleChange}
+              required
+              disabled={loadingData}
+              className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-slate-600 disabled:text-slate-400'
+            >
+              <option value=''>
+                {loadingData ? 'Loading schools...' : 'Select a school'}
+              </option>
+              {availableSchools.map(school => (
+                <option key={school._id} value={school._id}>
+                  {school.name}
+                </option>
+              ))}
+            </select>
+            {availableSchools.length === 0 && !loadingData && (
+              <p className='text-yellow-400 text-sm mt-1'>
+                No schools available. Please create a school first in the Attendance page.
+              </p>
+            )}
+          </div>
+          
           <div className='space-y-2'>
             <label className='block text-white text-sm font-medium'>Select Class *</label>
             <select 

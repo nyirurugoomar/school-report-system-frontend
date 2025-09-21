@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import * as classAPI from '../api/class'
 import * as studentAPI from '../api/student'
 import * as attendanceAPI from '../api/attendance'
+import * as schoolAPI from '../api/school'
 
 function Attendance() {
   const navigate = useNavigate()
@@ -28,7 +29,8 @@ function Attendance() {
     className: '',
     subjectName: '',
     classRoom: '',
-    classCredit: ''
+    classCredit: '',
+    schoolId: ''
   })
 
   // Classes data - now using state to allow adding new classes
@@ -44,6 +46,28 @@ function Attendance() {
   const [showStudentsModal, setShowStudentsModal] = useState(false)
   const [selectedClassForStudents, setSelectedClassForStudents] = useState(null)
   
+  // School management states
+  const [mySchool, setMySchool] = useState(null)
+  const [schoolStats, setSchoolStats] = useState(null)
+  const [showCreateSchoolModal, setShowCreateSchoolModal] = useState(false)
+  const [showEditSchoolModal, setShowEditSchoolModal] = useState(false)
+  const [schoolLoading, setSchoolLoading] = useState(false)
+  
+  // Available schools for class creation
+  const [availableSchools, setAvailableSchools] = useState([])
+  const [loadingSchools, setLoadingSchools] = useState(false)
+  
+  // New school form state
+  const [newSchool, setNewSchool] = useState({
+    name: '',
+    address: '',
+    phone: '',
+    email: '',
+    principal: '',
+    establishedYear: '',
+    description: ''
+  })
+  
   // Attendance improvement states
   const [attendanceSummary, setAttendanceSummary] = useState({
     total: 0,
@@ -57,11 +81,190 @@ function Attendance() {
   const [updatingStudents, setUpdatingStudents] = useState(new Set())
   const [pendingRequests, setPendingRequests] = useState(new Map())
 
+  // Helper function to safely get ID from object or string
+  const getSafeId = (item, idField = '_id') => {
+    if (!item) return null
+    if (typeof item === 'string') return item
+    if (typeof item === 'object' && item[idField]) return item[idField]
+    return null
+  }
+
+  // Helper function to safely get school ID
+  const getSafeSchoolId = (item) => {
+    if (!item) return null
+    if (typeof item === 'string') return item
+    if (typeof item === 'object') {
+      return item._id || item.id || item.name || null
+    }
+    return null
+  }
+
+  // Helper function to safely get class ID
+  const getSafeClassId = (item) => {
+    if (!item) return null
+    if (typeof item === 'string') return item
+    if (typeof item === 'object') {
+      return item._id || item.id || item.className || null
+    }
+    return null
+  }
+
   // Load classes and students on component mount
   useEffect(() => {
     loadClasses()
     loadStudents()
+    loadMySchool()
   }, [])
+
+  // Recalculate stats when data changes
+  useEffect(() => {
+    if (schoolStats !== null) {
+      const newStats = calculateSchoolStats()
+      setSchoolStats(newStats)
+    }
+  }, [classes, students, attendanceRecords])
+
+  // Calculate school statistics from current data
+  const calculateSchoolStats = () => {
+    const totalClasses = classes.length
+    const totalStudents = students.length
+    const totalAttendanceRecords = attendanceRecords.length
+    
+    // Calculate attendance rate from current records
+    const presentRecords = attendanceRecords.filter(record => record.status === 'present').length
+    const attendanceRate = totalAttendanceRecords > 0 ? Math.round((presentRecords / totalAttendanceRecords) * 100) : 0
+    
+    return {
+      totalClasses,
+      totalStudents,
+      totalAttendanceRecords,
+      attendanceRate
+    }
+  }
+
+  // Load school data
+  const loadMySchool = async () => {
+    try {
+      setSchoolLoading(true)
+      
+      // Get available schools (this works for both teachers and admins)
+      const availableSchoolsResponse = await classAPI.getAvailableSchools()
+      console.log('Available schools response:', availableSchoolsResponse)
+      
+      // Extract the data array from the response
+      const schools = availableSchoolsResponse?.data || availableSchoolsResponse || []
+      console.log('Available schools array:', schools)
+      
+      // Set available schools for the new interface
+      setAvailableSchools(schools)
+      
+      if (schools && schools.length > 0) {
+        // Use the first available school as "my school" (primary)
+        const primarySchool = schools[0]
+        console.log('Using primary school:', primarySchool)
+        setMySchool(primarySchool)
+        
+        // Calculate school statistics from current data (no API call needed)
+        const calculatedStats = calculateSchoolStats()
+        console.log('Calculated school stats:', calculatedStats)
+        setSchoolStats(calculatedStats)
+      } else {
+        // No schools available
+        setMySchool(null)
+        setSchoolStats(null)
+      }
+    } catch (error) {
+      console.error('Error loading school:', error)
+      // School doesn't exist yet, user needs to create it
+      setMySchool(null)
+      setSchoolStats(null)
+    } finally {
+      setSchoolLoading(false)
+    }
+  }
+
+  // Create school function
+  const createSchool = async (schoolData) => {
+    try {
+      setSchoolLoading(true)
+      
+      // Use the new teacher school creation endpoint
+      const response = await classAPI.createTeacherSchool(schoolData)
+      console.log('Teacher school created:', response)
+      
+      // Reload school data to get the updated list
+      await loadMySchool()
+      
+      setShowCreateSchoolModal(false)
+      setSuccess('School created successfully!')
+      
+      // Reset form
+      setNewSchool({
+        name: '',
+        address: '',
+        phone: '',
+        email: '',
+        principal: '',
+        establishedYear: '',
+        description: ''
+      })
+    } catch (error) {
+      console.error('Error creating school:', error)
+      setError('Failed to create school: ' + (error.response?.data?.message || error.message))
+    } finally {
+      setSchoolLoading(false)
+    }
+  }
+
+  // Set primary school function
+  const setPrimarySchool = async (school) => {
+    try {
+      setMySchool(school)
+      setSuccess(`${school.name} set as primary school!`)
+    } catch (error) {
+      console.error('Error setting primary school:', error)
+      setError('Failed to set primary school')
+    }
+  }
+
+  // Update school function
+  const updateSchool = async (schoolData) => {
+    try {
+      setSchoolLoading(true)
+      const response = await schoolAPI.updateMySchool(schoolData)
+      console.log('School updated:', response)
+      
+      // Reload school data to get the updated information
+      await loadMySchool()
+      
+      setShowEditSchoolModal(false)
+      setSuccess('School updated successfully!')
+    } catch (error) {
+      console.error('Error updating school:', error)
+      setError('Failed to update school: ' + (error.response?.data?.message || error.message))
+    } finally {
+      setSchoolLoading(false)
+    }
+  }
+
+  // Load available schools for class creation
+  const loadAvailableSchools = async () => {
+    try {
+      setLoadingSchools(true)
+      const schoolsResponse = await classAPI.getAvailableSchools()
+      console.log('Available schools response for class creation:', schoolsResponse)
+      
+      // Extract the data array from the response
+      const schools = schoolsResponse?.data || schoolsResponse || []
+      console.log('Available schools array for class creation:', schools)
+      setAvailableSchools(schools)
+    } catch (error) {
+      console.error('Error loading available schools:', error)
+      setError('Failed to load available schools: ' + (error.response?.data?.message || error.message))
+    } finally {
+      setLoadingSchools(false)
+    }
+  }
 
   // Load attendance records and summary when classes, date, or selectedClass changes
   useEffect(() => {
@@ -309,6 +512,10 @@ function Attendance() {
       setError('Class room is required')
       return
     }
+    if (!newClass.schoolId) {
+      setError('Please select a school')
+      return
+    }
 
     setLoading(true)
     setError('')
@@ -319,7 +526,8 @@ function Attendance() {
         className: newClass.className.trim(),
         subjectName: newClass.subjectName.trim(),
         classRoom: newClass.classRoom.trim(),
-        classCredit: newClass.classCredit.trim() || undefined // Optional field
+        classCredit: newClass.classCredit.trim() || undefined, // Optional field
+        schoolId: newClass.schoolId // Add schoolId
       }
 
       console.log('Sending class data:', classData)
@@ -338,7 +546,7 @@ function Attendance() {
       }
       
       setClasses([...classes, newClassData])
-      setNewClass({ className: '', subjectName: '', classRoom: '', classCredit: '' })
+      setNewClass({ className: '', subjectName: '', classRoom: '', classCredit: '', schoolId: '' })
       setShowCreateClassModal(false)
       
     } catch (error) {
@@ -525,21 +733,21 @@ function Attendance() {
       // Update the attendance record with the actual response
       if (response && response.length > 0) {
         const updatedAttendanceMapWithId = {
-          ...studentAttendance,
-          [studentId]: {
-            status: status,
-            remarks: attendanceData.remarks,
+        ...studentAttendance,
+        [studentId]: {
+          status: status,
+          remarks: attendanceData.remarks,
             _id: response[0]._id
-          }
         }
+      }
         setStudentAttendance(updatedAttendanceMapWithId)
 
         // Update attendance records
-        const updatedRecords = attendanceRecords.filter(record => 
-          !(record.studentId === studentId && record.date === attendanceDate)
-        )
+      const updatedRecords = attendanceRecords.filter(record => 
+        !(record.studentId === studentId && record.date === attendanceDate)
+      )
         updatedRecords.push(response[0])
-        setAttendanceRecords(updatedRecords)
+      setAttendanceRecords(updatedRecords)
       }
 
       setSuccess(`Student attendance updated to ${status}!`)
@@ -797,7 +1005,7 @@ function Attendance() {
   const selectedClassData = classes.find(cls => cls.className === selectedClass)
   const studentsInSelectedClass = selectedClassData ? 
     students.filter(student => {
-      const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+      const studentClassId = getSafeClassId(student?.classId)
       console.log('Filtering students:', {
         selectedClass,
         selectedClassData: selectedClassData?._id,
@@ -831,12 +1039,205 @@ function Attendance() {
           </div>
         )}
         
+        {/* School Management Section */}
+        {schoolLoading ? (
+          <div className="bg-slate-700 rounded-lg p-6 mb-6">
+            <div className="flex items-center justify-center">
+              <svg className="animate-spin h-8 w-8 text-blue-500 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span className="text-white">Loading school information...</span>
+            </div>
+          </div>
+        ) : availableSchools && availableSchools.length > 0 ? (
+          <div className="bg-slate-700 rounded-lg p-6 mb-6">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-white mb-2">🏫 My Schools ({availableSchools.length})</h2>
+                <p className="text-slate-300">Manage your schools and create classes</p>
+              </div>
+            <button
+                onClick={() => setShowCreateSchoolModal(true)}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+              >
+                <span className="mr-2">+</span>
+                Create New School
+            </button>
+            </div>
+            
+            {/* Schools Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {availableSchools.map((school, index) => {
+                const isPrimarySchool = index === 0
+                const schoolClasses = classes.filter(cls => {
+                  const schoolId = getSafeSchoolId(cls?.schoolId)
+                  return schoolId === school._id
+                })
+                const schoolStudents = students.filter(student => {
+                  const studentSchoolId = getSafeSchoolId(student?.schoolId)
+                  return studentSchoolId === school._id
+                })
+                
+                return (
+                  <div 
+                    key={school._id} 
+                    className={`bg-slate-600 rounded-lg p-6 hover:bg-slate-500 transition-colors ${
+                      isPrimarySchool ? 'ring-2 ring-blue-500' : ''
+                    }`}
+                  >
+                    {/* School Header */}
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center mb-2">
+                          <h3 className="text-xl font-bold text-white">{school.name}</h3>
+                          {isPrimarySchool && (
+                            <span className="ml-2 bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-medium">
+                              Primary
+                            </span>
+                          )}
+                        </div>
+                        {school.principal && (
+                          <p className="text-slate-300 text-sm">Principal: {school.principal}</p>
+                        )}
+                      </div>
+                      <div className="flex space-x-2">
+            <button
+              onClick={() => {
+                            setMySchool(school)
+                            setShowEditSchoolModal(true)
+              }}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
+            >
+                          Edit
+            </button>
+            <button
+                          onClick={() => setPrimarySchool(school)}
+                          className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                        >
+                          Set Primary
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* School Details */}
+                    <div className="space-y-3 mb-4">
+                      {school.address && (
+                        <div className="flex items-start">
+                          <span className="text-slate-400 text-sm w-16">Address:</span>
+                          <span className="text-white text-sm flex-1">{school.address}</span>
+                        </div>
+                      )}
+                      {school.phone && (
+                        <div className="flex items-start">
+                          <span className="text-slate-400 text-sm w-16">Phone:</span>
+                          <span className="text-white text-sm flex-1">{school.phone}</span>
+                        </div>
+                      )}
+                      {school.email && (
+                        <div className="flex items-start">
+                          <span className="text-slate-400 text-sm w-16">Email:</span>
+                          <span className="text-white text-sm flex-1">{school.email}</span>
+                        </div>
+                      )}
+                      {school.establishedYear && (
+                        <div className="flex items-start">
+                          <span className="text-slate-400 text-sm w-16">Established:</span>
+                          <span className="text-white text-sm flex-1">{school.establishedYear}</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* School Statistics */}
+                    <div className="bg-slate-700 rounded-lg p-4 mb-4">
+                      <h4 className="text-sm font-semibold text-white mb-3">📊 Statistics</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-blue-400">{schoolClasses.length}</div>
+                          <div className="text-slate-300 text-xs">Classes</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-lg font-bold text-green-400">{schoolStudents.length}</div>
+                          <div className="text-slate-300 text-xs">Students</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => {
+                          setShowCreateClassModal(true)
+                          loadAvailableSchools()
+                        }}
+                        className="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded text-sm transition-colors"
+                      >
+                        + Add Class
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowAddStudentModal(true)
+                        }}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm transition-colors"
+                      >
+                        + Add Student
+            </button>
+          </div>
+        </div>
+                )
+              })}
+            </div>
+            
+            {/* Overall Statistics */}
+            {schoolStats && (
+              <div className="mt-6 bg-slate-600 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-white mb-3">📊 Overall Statistics</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-400">{schoolStats.totalClasses || 0}</div>
+                    <div className="text-slate-300 text-sm">Total Classes</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-400">{schoolStats.totalStudents || 0}</div>
+                    <div className="text-slate-300 text-sm">Total Students</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-yellow-400">{schoolStats.totalAttendanceRecords || 0}</div>
+                    <div className="text-slate-300 text-sm">Attendance Records</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-400">{schoolStats.attendanceRate || 0}%</div>
+                    <div className="text-slate-300 text-sm">Attendance Rate</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-slate-700 rounded-lg p-6 mb-6">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🏫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">No Schools Found</h2>
+              <p className="text-slate-300 mb-6">You need to create your first school before managing classes and students.</p>
+              <button
+                onClick={() => setShowCreateSchoolModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors"
+              >
+                Create My First School
+              </button>
+            </div>
+          </div>
+        )}
+        
         <div className="bg-slate-700 rounded-lg p-6 mb-8">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-white">Classes Overview</h3>
             <div className="flex space-x-3">
                 <button
-                  onClick={() => setShowCreateClassModal(true)}
+                  onClick={() => {
+                    setShowCreateClassModal(true)
+                    loadAvailableSchools()
+                  }}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
                 >
                 + Add Class
@@ -1587,6 +1988,214 @@ function Attendance() {
           </div>
         )}
 
+        {/* Create School Modal */}
+        {showCreateSchoolModal && (
+          <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+            <div className='bg-slate-700 rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto'>
+              <h2 className='text-xl font-semibold text-white mb-4'>Create New School</h2>
+              
+              <div className='space-y-4'>
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>School Name *</label>
+                  <input
+                    type='text'
+                    value={newSchool.name}
+                    onChange={(e) => setNewSchool({...newSchool, name: e.target.value})}
+                    placeholder='e.g., ABC High School'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Address</label>
+                  <input
+                    type='text'
+                    value={newSchool.address}
+                    onChange={(e) => setNewSchool({...newSchool, address: e.target.value})}
+                    placeholder='e.g., 123 Main Street, City'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Phone Number</label>
+                  <input
+                    type='text'
+                    value={newSchool.phone}
+                    onChange={(e) => setNewSchool({...newSchool, phone: e.target.value})}
+                    placeholder='e.g., +1 (555) 123-4567'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Email Address</label>
+                  <input
+                    type='email'
+                    value={newSchool.email}
+                    onChange={(e) => setNewSchool({...newSchool, email: e.target.value})}
+                    placeholder='e.g., info@school.edu'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Principal Name</label>
+                  <input
+                    type='text'
+                    value={newSchool.principal}
+                    onChange={(e) => setNewSchool({...newSchool, principal: e.target.value})}
+                    placeholder='e.g., Dr. John Smith'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Established Year</label>
+                  <input
+                    type='number'
+                    value={newSchool.establishedYear}
+                    onChange={(e) => setNewSchool({...newSchool, establishedYear: e.target.value})}
+                    placeholder='e.g., 2000'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Description</label>
+                  <textarea
+                    value={newSchool.description}
+                    onChange={(e) => setNewSchool({...newSchool, description: e.target.value})}
+                    placeholder='Brief description of the school...'
+                    rows={3}
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+              </div>
+              
+              <div className='flex justify-end space-x-3 mt-6'>
+                <button
+                  onClick={() => setShowCreateSchoolModal(false)}
+                  className='px-4 py-2 text-slate-300 hover:text-white transition-colors'
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => createSchool(newSchool)}
+                  disabled={schoolLoading || !newSchool.name.trim()}
+                  className='px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-500 text-white rounded-lg transition-colors'
+                >
+                  {schoolLoading ? 'Creating...' : 'Create School'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit School Modal */}
+        {showEditSchoolModal && mySchool && (
+          <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
+            <div className='bg-slate-700 rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto'>
+              <h2 className='text-xl font-semibold text-white mb-4'>Edit School</h2>
+              
+              <div className='space-y-4'>
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>School Name *</label>
+                  <input
+                    type='text'
+                    value={mySchool.name}
+                    onChange={(e) => setMySchool({...mySchool, name: e.target.value})}
+                    placeholder='e.g., ABC High School'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Address</label>
+                  <input
+                    type='text'
+                    value={mySchool.address || ''}
+                    onChange={(e) => setMySchool({...mySchool, address: e.target.value})}
+                    placeholder='e.g., 123 Main Street, City'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Phone Number</label>
+                  <input
+                    type='text'
+                    value={mySchool.phone || ''}
+                    onChange={(e) => setMySchool({...mySchool, phone: e.target.value})}
+                    placeholder='e.g., +1 (555) 123-4567'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Email Address</label>
+                  <input
+                    type='email'
+                    value={mySchool.email || ''}
+                    onChange={(e) => setMySchool({...mySchool, email: e.target.value})}
+                    placeholder='e.g., info@school.edu'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Principal Name</label>
+                  <input
+                    type='text'
+                    value={mySchool.principal || ''}
+                    onChange={(e) => setMySchool({...mySchool, principal: e.target.value})}
+                    placeholder='e.g., Dr. John Smith'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Established Year</label>
+                  <input
+                    type='number'
+                    value={mySchool.establishedYear || ''}
+                    onChange={(e) => setMySchool({...mySchool, establishedYear: e.target.value})}
+                    placeholder='e.g., 2000'
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>Description</label>
+                  <textarea
+                    value={mySchool.description || ''}
+                    onChange={(e) => setMySchool({...mySchool, description: e.target.value})}
+                    placeholder='Brief description of the school...'
+                    rows={3}
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
+                  />
+                </div>
+              </div>
+              
+              <div className='flex justify-end space-x-3 mt-6'>
+                <button
+                  onClick={() => setShowEditSchoolModal(false)}
+                  className='px-4 py-2 text-slate-300 hover:text-white transition-colors'
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => updateSchool(mySchool)}
+                  disabled={schoolLoading || !mySchool.name.trim()}
+                  className='px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-500 text-white rounded-lg transition-colors'
+                >
+                  {schoolLoading ? 'Updating...' : 'Update School'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Rest of the modals remain the same... */}
         {/* Create Class Modal */}
         {showCreateClassModal && (
@@ -1604,6 +2213,34 @@ function Attendance() {
                     placeholder='e.g., Advanced Mathematics'
                     className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder-slate-400'
                   />
+                </div>
+                
+                <div>
+                  <label className='block text-white text-sm font-medium mb-2'>School *</label>
+                  <select
+                    value={newClass.schoolId}
+                    onChange={(e) => setNewClass({...newClass, schoolId: e.target.value})}
+                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+                    disabled={loadingSchools}
+                  >
+                    <option value=''>
+                      {loadingSchools ? 'Loading schools...' : 'Select a school'}
+                    </option>
+                    {availableSchools.length > 0 ? (
+                      availableSchools.map(school => (
+                        <option key={school._id} value={school._id}>
+                          {school.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value='' disabled>No schools available - Create a school first</option>
+                    )}
+                  </select>
+                  {availableSchools.length === 0 && !loadingSchools && (
+                    <p className='text-yellow-400 text-sm mt-1'>
+                      You need to create a school first before creating classes.
+                    </p>
+                  )}
                 </div>
                 
                 <div>
@@ -1644,7 +2281,7 @@ function Attendance() {
                 <button
                   onClick={() => {
                     setShowCreateClassModal(false)
-                    setNewClass({ className: '', subjectName: '', classRoom: '', classCredit: '' })
+                    setNewClass({ className: '', subjectName: '', classRoom: '', classCredit: '', schoolId: '' })
                     setError('')
                   }}
                   className='flex-1 bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200'
@@ -1653,7 +2290,7 @@ function Attendance() {
                 </button>
                 <button
                   onClick={handleCreateClass}
-                  disabled={loading || !newClass.className.trim() || !newClass.subjectName.trim() || !newClass.classRoom.trim()}
+                  disabled={loading || loadingSchools || !newClass.className.trim() || !newClass.subjectName.trim() || !newClass.classRoom.trim() || !newClass.schoolId}
                   className='flex-1 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200'
                 >
                   {loading ? 'Creating...' : 'Create Class'}

@@ -1,5 +1,17 @@
 import api from './axios'
 
+export const getAvailableSchools = async () => {
+  try {
+    console.log('Making get available schools request to:', `${api.defaults.baseURL}/comments/available-schools`);
+    const response = await api.get('/comments/available-schools');
+    console.log('Get available schools response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get available schools API error:', error);
+    throw error;
+  }
+};
+
 export const createComment = async (commentData) => {
   try {
     console.log('Making create comment request to:', `${api.defaults.baseURL}/comments`);
