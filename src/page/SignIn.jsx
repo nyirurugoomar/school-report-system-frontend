@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { signin } from '../api/auth'
 import { setUser } from '../utils/auth'
-import logo from '../assets/logo_reb.png'
+import logo from '../assets/Partnershiplogo.png'
 
 function SignIn() {
   const navigate = useNavigate()
@@ -80,17 +80,18 @@ function SignIn() {
   }
 
   return (
-    <div className='min-h-screen bg-slate-800 flex flex-col justify-center items-center px-4'>
+    <div className='min-h-screen bg-slate-800 flex flex-col justify-center items-center px-4 py-8'>
       {/* Header */}
-      <div className='text-center mb-8'>
-        <img src={logo} alt="logo" className='w-60 h-60' />
+      <div className='text-center mb-6 sm:mb-8'>
+        <img src={logo} alt="logo" className='w-32 h-32 sm:w-48 sm:h-48 lg:w-60 lg:h-60' />
       </div>
-      <div className='text-center mb-8'>
-        <h1 className='text-4xl font-bold text-white mb-2'>Welcome Back</h1>
+      <div className='text-center mb-6 sm:mb-8'>
+        <h1 className='text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2'>Welcome Back</h1>
+        <p className='text-slate-400 text-sm sm:text-base'>Sign in to your account</p>
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className='w-full max-w-md space-y-6'>
+      <form onSubmit={handleSubmit} className='w-full max-w-sm sm:max-w-md space-y-4 sm:space-y-6'>
         {/* Error Message */}
         {error && (
           <div className='bg-red-500/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg text-sm'>
@@ -108,7 +109,7 @@ function SignIn() {
             onChange={handleChange}
             placeholder='Enter your username'
             required
-            className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400'
+            className='w-full px-3 sm:px-4 py-3 sm:py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400 text-sm sm:text-base'
           />
         </div>
 
@@ -122,7 +123,7 @@ function SignIn() {
             onChange={handleChange}
             placeholder='Enter your password'
             required
-            className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400'
+            className='w-full px-3 sm:px-4 py-3 sm:py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400 text-sm sm:text-base'
           />
         </div>
 
@@ -137,15 +138,15 @@ function SignIn() {
         <button 
           type="submit"
           disabled={loading}
-          className='w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-500 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 cursor-pointer'
+          className='w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-500 text-white font-semibold py-3 sm:py-3 px-4 rounded-lg transition-colors duration-200 cursor-pointer text-sm sm:text-base'
         >
           {loading ? 'Signing In...' : 'Log In'}
         </button>
 
         {/* Sign Up Link */}
         <div className='text-center'>
-          <span className='text-white text-sm'>Don't have an account? </span>
-          <Link to="/signup" className='text-green-400 hover:text-green-300 text-sm font-medium'>
+          <span className='text-white text-xs sm:text-sm'>Don't have an account? </span>
+          <Link to="/signup" className='text-green-400 hover:text-green-300 text-xs sm:text-sm font-medium'>
             Sign up
           </Link>
         </div>

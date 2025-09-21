@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { signup } from '../api/auth'
-import logo from '../assets/logo_reb.png'
+import logo from '../assets/Partnershiplogo.png'
 function SignUp() {
   const navigate = useNavigate()
   const [formData, setFormData] = useState({
@@ -45,15 +45,16 @@ function SignUp() {
   }
 
   return (
-    <div className='min-h-screen bg-slate-800 flex flex-col justify-center items-center px-4'>
-      <div className='text-center mb-8'>
-        <img src={logo} alt="logo" className='w-60 h-60' />
+    <div className='min-h-screen bg-slate-800 flex flex-col justify-center items-center px-4 py-8'>
+      <div className='text-center mb-6 sm:mb-8'>
+        <img src={logo} alt="logo" className='w-32 h-32 sm:w-48 sm:h-48 lg:w-60 lg:h-60' />
       </div>
-      <div className='text-center mb-8'>
-        <h1 className='text-4xl font-bold text-white mb-2'>Create New Account</h1>
+      <div className='text-center mb-6 sm:mb-8'>
+        <h1 className='text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2'>Create New Account</h1>
+        <p className='text-slate-400 text-sm sm:text-base'>Join our school management system</p>
       </div>
       
-      <form onSubmit={handleSubmit} className='w-full max-w-md space-y-6'>
+      <form onSubmit={handleSubmit} className='w-full max-w-sm sm:max-w-md space-y-4 sm:space-y-6'>
         {/* Error Message */}
         {error && (
           <div className='bg-red-500/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg text-sm'>
@@ -68,9 +69,9 @@ function SignUp() {
             name="username"
             value={formData.username}
             onChange={handleChange}
-            placeholder='full name'
+            placeholder='Enter your full name'
             required
-            className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400'
+            className='w-full px-3 sm:px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400 text-sm sm:text-base'
           />
         </div>
         
@@ -83,7 +84,7 @@ function SignUp() {
             onChange={handleChange}
             placeholder='you@example.com'
             required
-            className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400'
+            className='w-full px-3 sm:px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400 text-sm sm:text-base'
           />
         </div>
         
@@ -94,25 +95,25 @@ function SignUp() {
             name="password"
             value={formData.password}
             onChange={handleChange}
-            placeholder='password'
+            placeholder='Enter your password'
             required
             minLength={6}
-            className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400'
+            className='w-full px-3 sm:px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400 text-sm sm:text-base'
           />
         </div>
         
         <button 
           type="submit"
           disabled={loading}
-          className='w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-500 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200'
+          className='w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-500 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 text-sm sm:text-base'
         >
           {loading ? 'Creating Account...' : 'Create Account'}
         </button>
       </form>
       
       <div className='text-center mt-4'>
-        <span className='text-white text-sm'>Already have an account? </span>
-        <Link to="/" className='text-green-400 hover:text-green-300 text-sm font-medium'>
+        <span className='text-white text-xs sm:text-sm'>Already have an account? </span>
+        <Link to="/" className='text-green-400 hover:text-green-300 text-xs sm:text-sm font-medium'>
           Sign in
         </Link>
       </div>

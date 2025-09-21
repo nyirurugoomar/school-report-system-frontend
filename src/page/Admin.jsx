@@ -383,60 +383,64 @@ function Admin() {
       {/* Header */}
       <div className="bg-slate-800 border-b border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
-              <p className="text-slate-400 mt-1">Manage and review school reports</p>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 sm:py-6 space-y-4 sm:space-y-0">
+            <div className="w-full sm:w-auto">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white">Admin Dashboard</h1>
+              <p className="text-slate-400 mt-1 text-sm sm:text-base">Manage and review school reports</p>
             </div>
-            <div className="flex space-x-3">
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
               <button
                 onClick={() => setShowCreateClassModal(true)}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 sm:px-4 rounded-lg transition-colors flex items-center justify-center text-sm sm:text-base"
               >
                 <span className="mr-2">🏫</span>
-                Add Class
+                <span className="hidden sm:inline">Add Class</span>
+                <span className="sm:hidden">Class</span>
               </button>
               <button
                 onClick={() => setShowCreateStudentModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 sm:px-4 rounded-lg transition-colors flex items-center justify-center text-sm sm:text-base"
               >
                 <span className="mr-2">👥</span>
-                Add Student
+                <span className="hidden sm:inline">Add Student</span>
+                <span className="sm:hidden">Student</span>
               </button>
               <button
                 onClick={() => navigate('/')}
-                className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg transition-colors"
+                className="bg-slate-600 hover:bg-slate-700 text-white px-3 py-2 sm:px-4 rounded-lg transition-colors text-sm sm:text-base"
               >
-                Back to Home
+                <span className="hidden sm:inline">Back to Home</span>
+                <span className="sm:hidden">Home</span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Error Message */}
         {error && (
-          <div className="bg-red-600 text-white p-4 rounded-lg mb-6">
+          <div className="bg-red-600 text-white p-3 sm:p-4 rounded-lg mb-4 sm:mb-6 text-sm sm:text-base">
             {error}
           </div>
         )}
 
         {/* Tab Navigation */}
-        <div className="bg-slate-800 rounded-lg p-1 mb-8">
-          <div className="flex space-x-1">
+        <div className="bg-slate-800 rounded-lg p-1 mb-4 sm:mb-8">
+          <div className="flex flex-wrap gap-1">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center px-4 py-3 rounded-md transition-colors ${
+                className={`flex-1 min-w-0 flex items-center justify-center px-2 sm:px-4 py-2 sm:py-3 rounded-md transition-colors text-xs sm:text-sm ${
                   activeTab === tab.id
                     ? 'bg-blue-600 text-white'
                     : 'text-slate-400 hover:text-white hover:bg-slate-700'
                 }`}
               >
-                <span className="mr-2">{tab.icon}</span>
-                {tab.name}
+                <span className="mr-1 sm:mr-2 text-sm sm:text-base">{tab.icon}</span>
+                <span className="hidden xs:inline sm:inline">{tab.name}</span>
+                <span className="xs:hidden sm:hidden">{tab.name.split(' ')[0]}</span>
               </button>
             ))}
           </div>
@@ -444,127 +448,127 @@ function Admin() {
 
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div className="space-y-8">
+          <div className="space-y-4 sm:space-y-8">
             {/* Dashboard Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-slate-700 rounded-lg p-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+              <div className="bg-slate-700 rounded-lg p-3 sm:p-6">
                 <div className="flex items-center">
-                  <div className="p-2 bg-blue-600 rounded-lg">
-                    <span className="text-white text-xl">👥</span>
+                  <div className="p-1 sm:p-2 bg-blue-600 rounded-lg">
+                    <span className="text-white text-sm sm:text-xl">👥</span>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-slate-400 text-sm">Total Students</p>
-                    <p className="text-white text-2xl font-bold">{students.length}</p>
+                  <div className="ml-2 sm:ml-4">
+                    <p className="text-slate-400 text-xs sm:text-sm">Students</p>
+                    <p className="text-white text-lg sm:text-2xl font-bold">{students.length}</p>
                   </div>
                 </div>
               </div>
               
-              <div className="bg-slate-700 rounded-lg p-6">
+              <div className="bg-slate-700 rounded-lg p-3 sm:p-6">
                 <div className="flex items-center">
-                  <div className="p-2 bg-green-600 rounded-lg">
-                    <span className="text-white text-xl">🏫</span>
+                  <div className="p-1 sm:p-2 bg-green-600 rounded-lg">
+                    <span className="text-white text-sm sm:text-xl">🏫</span>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-slate-400 text-sm">Total Classes</p>
-                    <p className="text-white text-2xl font-bold">{classes.length}</p>
+                  <div className="ml-2 sm:ml-4">
+                    <p className="text-slate-400 text-xs sm:text-sm">Classes</p>
+                    <p className="text-white text-lg sm:text-2xl font-bold">{classes.length}</p>
                   </div>
                 </div>
               </div>
               
-              <div className="bg-slate-700 rounded-lg p-6">
+              <div className="bg-slate-700 rounded-lg p-3 sm:p-6">
                 <div className="flex items-center">
-                  <div className="p-2 bg-yellow-600 rounded-lg">
-                    <span className="text-white text-xl">💬</span>
+                  <div className="p-1 sm:p-2 bg-yellow-600 rounded-lg">
+                    <span className="text-white text-sm sm:text-xl">💬</span>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-slate-400 text-sm">Total Comments</p>
-                    <p className="text-white text-2xl font-bold">{comments.length}</p>
+                  <div className="ml-2 sm:ml-4">
+                    <p className="text-slate-400 text-xs sm:text-sm">Comments</p>
+                    <p className="text-white text-lg sm:text-2xl font-bold">{comments.length}</p>
                   </div>
                 </div>
               </div>
               
-              <div className="bg-slate-700 rounded-lg p-6">
+              <div className="bg-slate-700 rounded-lg p-3 sm:p-6">
                 <div className="flex items-center">
-                  <div className="p-2 bg-purple-600 rounded-lg">
-                    <span className="text-white text-xl">📋</span>
+                  <div className="p-1 sm:p-2 bg-purple-600 rounded-lg">
+                    <span className="text-white text-sm sm:text-xl">📋</span>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-slate-400 text-sm">Attendance Records</p>
-                    <p className="text-white text-2xl font-bold">{attendanceRecords.length}</p>
+                  <div className="ml-2 sm:ml-4">
+                    <p className="text-slate-400 text-xs sm:text-sm">Attendance</p>
+                    <p className="text-white text-lg sm:text-2xl font-bold">{attendanceRecords.length}</p>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Quick Actions */}
-            <div className="bg-slate-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-slate-700 rounded-lg p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-3 sm:mb-4">Quick Actions</h3>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <button
                   onClick={() => setShowCreateClassModal(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg transition-colors"
+                  className="bg-green-600 hover:bg-green-700 text-white p-3 sm:p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
-                    <span className="text-2xl mb-2 block">🏫</span>
-                    <h4 className="font-medium">Create Class</h4>
-                    <p className="text-sm text-green-200 mt-1">Add new class</p>
+                    <span className="text-lg sm:text-2xl mb-1 sm:mb-2 block">🏫</span>
+                    <h4 className="font-medium text-xs sm:text-sm">Create Class</h4>
+                    <p className="text-xs text-green-200 mt-1 hidden sm:block">Add new class</p>
                   </div>
                 </button>
                 
                 <button
                   onClick={() => setShowCreateStudentModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg transition-colors"
+                  className="bg-blue-600 hover:bg-blue-700 text-white p-3 sm:p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
-                    <span className="text-2xl mb-2 block">👥</span>
-                    <h4 className="font-medium">Add Student</h4>
-                    <p className="text-sm text-blue-200 mt-1">Register student</p>
+                    <span className="text-lg sm:text-2xl mb-1 sm:mb-2 block">👥</span>
+                    <h4 className="font-medium text-xs sm:text-sm">Add Student</h4>
+                    <p className="text-xs text-blue-200 mt-1 hidden sm:block">Register student</p>
                   </div>
                 </button>
                 
                 <button
                   onClick={() => setActiveTab('comments')}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white p-4 rounded-lg transition-colors"
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white p-3 sm:p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
-                    <span className="text-2xl mb-2 block">💬</span>
-                    <h4 className="font-medium">View Comments</h4>
-                    <p className="text-sm text-yellow-200 mt-1">Review feedback</p>
+                    <span className="text-lg sm:text-2xl mb-1 sm:mb-2 block">💬</span>
+                    <h4 className="font-medium text-xs sm:text-sm">View Comments</h4>
+                    <p className="text-xs text-yellow-200 mt-1 hidden sm:block">Review feedback</p>
                   </div>
                 </button>
                 
                 <button
                   onClick={() => setActiveTab('attendance')}
-                  className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg transition-colors"
+                  className="bg-purple-600 hover:bg-purple-700 text-white p-3 sm:p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
-                    <span className="text-2xl mb-2 block">��</span>
-                    <h4 className="font-medium">Check Attendance</h4>
-                    <p className="text-sm text-purple-200 mt-1">View records</p>
+                    <span className="text-lg sm:text-2xl mb-1 sm:mb-2 block">📋</span>
+                    <h4 className="font-medium text-xs sm:text-sm">Check Attendance</h4>
+                    <p className="text-xs text-purple-200 mt-1 hidden sm:block">View records</p>
                   </div>
                 </button>
               </div>
             </div>
 
             {/* Recent Comments */}
-            <div className="bg-slate-700 rounded-lg p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-white">Recent Comments</h3>
+            <div className="bg-slate-700 rounded-lg p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 space-y-2 sm:space-y-0">
+                <h3 className="text-base sm:text-lg font-semibold text-white">Recent Comments</h3>
                 <button
                   onClick={() => setActiveTab('comments')}
-                  className="text-blue-400 hover:text-blue-300 text-sm"
+                  className="text-blue-400 hover:text-blue-300 text-xs sm:text-sm"
                 >
                   View All →
                 </button>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {filteredComments.slice(0, 5).map(comment => (
-                  <div key={comment._id} className="bg-slate-600 rounded-lg p-4 cursor-pointer hover:bg-slate-500 transition-colors" onClick={() => openCommentModal(comment)}>
-                    <div className="flex justify-between items-start">
+                  <div key={comment._id} className="bg-slate-600 rounded-lg p-3 sm:p-4 cursor-pointer hover:bg-slate-500 transition-colors" onClick={() => openCommentModal(comment)}>
+                    <div className="flex flex-col sm:flex-row justify-between items-start space-y-2 sm:space-y-0">
                       <div className="flex-1">
-                        <h4 className="text-white font-medium">{comment.className} - {comment.subjectName}</h4>
-                        <p className="text-slate-300 text-sm mt-1">{comment.successStory || comment.challenge || 'No content'}</p>
-                        <div className="flex items-center mt-2 space-x-4">
+                        <h4 className="text-white font-medium text-sm sm:text-base">{comment.className} - {comment.subjectName}</h4>
+                        <p className="text-slate-300 text-xs sm:text-sm mt-1 line-clamp-2">{comment.successStory || comment.challenge || 'No content'}</p>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center mt-2 space-y-1 sm:space-y-0 sm:space-x-4">
                           <span className="text-blue-400 text-xs">Click to view full details</span>
                           {comment.teacherId && (
                             <span className="text-gray-400 text-xs">Teacher: {getTeacherName(comment.teacherId)}</span>
@@ -572,7 +576,7 @@ function Admin() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-slate-400 text-sm">{new Date(comment.createdAt || comment.date).toLocaleDateString()}</p>
+                        <p className="text-slate-400 text-xs sm:text-sm">{new Date(comment.createdAt || comment.date).toLocaleDateString()}</p>
                         <p className="text-slate-400 text-xs">{comment.numberOfStudents} students</p>
                       </div>
                     </div>
@@ -583,32 +587,32 @@ function Admin() {
 
             
             {/* Classes Overview */}
-<div className="bg-slate-700 rounded-lg p-6">
-  <div className="flex justify-between items-center mb-4">
-    <h3 className="text-lg font-semibold text-white">Classes Overview</h3>
+<div className="bg-slate-700 rounded-lg p-4 sm:p-6">
+  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 space-y-2 sm:space-y-0">
+    <h3 className="text-base sm:text-lg font-semibold text-white">Classes Overview</h3>
     <button
       onClick={() => setShowCreateClassModal(true)}
-      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+      className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-xs sm:text-sm w-full sm:w-auto"
     >
       + Add Class
     </button>
   </div>
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
     {classes.slice(0, 6).map(cls => (
       <div 
         key={cls._id} 
-        className="bg-slate-600 rounded-lg p-4 cursor-pointer hover:bg-slate-500 transition-colors"
+        className="bg-slate-600 rounded-lg p-3 sm:p-4 cursor-pointer hover:bg-slate-500 transition-colors"
         onClick={() => {
           setSelectedClassForStudents(cls)
           setShowStudentsModal(true)
         }}
       >
-        <div className="flex justify-between items-start">
-          <div>
-            <h4 className="text-white font-medium">{getClassName(cls)}</h4>
-            <p className="text-slate-300 text-sm">{getSubjectName(cls)}</p>
+        <div className="flex flex-col sm:flex-row justify-between items-start space-y-2 sm:space-y-0">
+          <div className="flex-1">
+            <h4 className="text-white font-medium text-sm sm:text-base">{getClassName(cls)}</h4>
+            <p className="text-slate-300 text-xs sm:text-sm">{getSubjectName(cls)}</p>
             <p className="text-slate-400 text-xs">Room: {cls.classRoom || 'N/A'}</p>
-            <p className="text-blue-400 text-xs mt-2">Click to view students →</p>
+            <p className="text-blue-400 text-xs mt-1 sm:mt-2">Click to view students →</p>
           </div>
           <div className="text-right">
             <p className="text-slate-400 text-xs">ID: {cls._id}</p>
@@ -631,25 +635,25 @@ function Admin() {
 </div>
 
             {/* Students Overview */}
-            <div className="bg-slate-700 rounded-lg p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-white">Students Overview</h3>
+            <div className="bg-slate-700 rounded-lg p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 space-y-2 sm:space-y-0">
+                <h3 className="text-base sm:text-lg font-semibold text-white">Students Overview</h3>
                 <button
                   onClick={() => setShowCreateStudentModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-xs sm:text-sm w-full sm:w-auto"
                 >
                   + Add Student
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {students.slice(0, 6).map(student => {
                   const schoolId = getSchoolId(student.schoolId)
                   return (
-                    <div key={student._id} className="bg-slate-600 rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-white font-medium">{getStudentName(student)}</h4>
-                          <p className="text-slate-300 text-sm">Class: {getClassNameFromId(student.classId)}</p>
+                    <div key={student._id} className="bg-slate-600 rounded-lg p-3 sm:p-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start space-y-2 sm:space-y-0">
+                        <div className="flex-1">
+                          <h4 className="text-white font-medium text-sm sm:text-base">{getStudentName(student)}</h4>
+                          <p className="text-slate-300 text-xs sm:text-sm">Class: {getClassNameFromId(student.classId)}</p>
                           {schoolId && (
                             <p className="text-slate-400 text-xs">School ID: {schoolId}</p>
                           )}
@@ -1321,10 +1325,10 @@ function Admin() {
 
       {/* Create Class Modal */}
       {showCreateClassModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white">Create New Class</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 sm:mb-6">
+              <h3 className="text-lg sm:text-xl font-bold text-white">Create New Class</h3>
               <button
                 onClick={() => setShowCreateClassModal(false)}
                 className="text-slate-400 hover:text-white"
