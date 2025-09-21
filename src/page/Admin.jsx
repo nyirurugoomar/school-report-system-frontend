@@ -42,6 +42,7 @@ function Admin() {
   const [attendanceTrends, setAttendanceTrends] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [schoolReport, setSchoolReport] = useState(null)
   const [selectedClassForStudents, setSelectedClassForStudents] = useState(null)
   const [showStudentsModal, setShowStudentsModal] = useState(false)
   
@@ -852,71 +853,360 @@ function Admin() {
         {/* Reports Tab */}
         {activeTab === 'reports' && (
           <div className="space-y-6">
+            {/* Report Generation Section */}
             <div className="bg-slate-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Generate Reports</h3>
+              <h3 className="text-lg font-semibold text-white mb-4">📊 Generate Reports</h3>
+              <p className="text-slate-300 mb-6">Generate comprehensive reports for your school data. All reports include detailed analytics and can be downloaded as PDF.</p>
+
+              {/* School Report Display */}
+              {schoolReport && (
+                <div className="bg-slate-600 rounded-lg p-6 mb-6">
+                  <h4 className="text-lg font-semibold text-white mb-4">🏫 School Management Report</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white">{schoolReport.totalSchools}</div>
+                      <div className="text-slate-300 text-sm">Total Schools</div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white">{schoolReport.totalClasses}</div>
+                      <div className="text-slate-300 text-sm">Total Classes</div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white">{schoolReport.totalStudents}</div>
+                      <div className="text-slate-300 text-sm">Total Students</div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white">{schoolReport.attendanceSummary.attendanceRate}%</div>
+                      <div className="text-slate-300 text-sm">Attendance Rate</div>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-slate-500 rounded-lg p-4">
+                      <h5 className="text-white font-semibold mb-2">📋 Attendance Summary</h5>
+                      <div className="text-slate-300 text-sm">
+                        <div>Present: {schoolReport.attendanceSummary.present}</div>
+                        <div>Absent: {schoolReport.attendanceSummary.absent}</div>
+                        <div>Late: {schoolReport.attendanceSummary.late}</div>
+                        <div>Rate: {schoolReport.attendanceSummary.attendanceRate}%</div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4">
+                      <h5 className="text-white font-semibold mb-2">🎓 Academic Performance</h5>
+                      <div className="text-slate-300 text-sm">
+                        <div>Average: {schoolReport.marksSummary.average}%</div>
+                        <div>Highest: {schoolReport.marksSummary.highest}%</div>
+                        <div>Lowest: {schoolReport.marksSummary.lowest}%</div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4">
+                      <h5 className="text-white font-semibold mb-2">📊 System Info</h5>
+                      <div className="text-slate-300 text-sm">
+                        <div>System: {schoolReport.generatedBy}</div>
+                        <div>Generated: {new Date(schoolReport.generatedAt).toLocaleDateString()}</div>
+                        <div>Schools: {schoolReport.totalSchools}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Individual School Details */}
+                  {schoolReport.schools && schoolReport.schools.length > 0 && (
+                    <div className="mt-6">
+                      <h5 className="text-white font-semibold mb-4">🏫 Individual School Details</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {schoolReport.schools.map((school, index) => (
+                          <div key={school.schoolId || index} className="bg-slate-500 rounded-lg p-4">
+                            <h6 className="text-white font-semibold mb-3">{school.schoolName}</h6>
+                            <div className="grid grid-cols-2 gap-2 text-slate-300 text-sm">
+                              <div>Classes: {school.statistics.totalClasses}</div>
+                              <div>Students: {school.statistics.totalStudents}</div>
+                              <div>Subjects: {school.statistics.totalSubjects}</div>
+                              <div>Records: {school.statistics.totalAttendanceRecords}</div>
+                              <div>Marks: {school.statistics.totalMarks}</div>
+                              <div>Rate: {school.statistics.attendanceSummary.attendanceRate}%</div>
+                              <div>Present: {school.statistics.attendanceSummary.present}</div>
+                              <div>Absent: {school.statistics.attendanceSummary.absent}</div>
+                              <div>Late: {school.statistics.attendanceSummary.late}</div>
+                              <div>Avg Score: {school.statistics.marksSummary.average}%</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* School Report */}
                 <button
                   onClick={async () => {
                     try {
-                      const report = await getAttendanceReportAdmin(
-                        new Date().toISOString().split('T')[0], // start date
-                        new Date().toISOString().split('T')[0]  // end date
-                      )
-                      console.log('Attendance report generated:', report)
-                      alert('Attendance report generated successfully!')
+                      setLoading(true)
+                      setError('')
+
+                      // Get school report from the new endpoint
+                      const report = await reportsAPI.getSchoolReport()
+
+                      console.log('School report generated:', report)
+                      
+                      // Handle the new data structure with multiple schools
+                      const schools = report?.schools || [];
+                      const summary = report?.summary || {};
+                      
+                      // Add fallback values to prevent undefined errors
+                      const safeReport = {
+                        school: 'School Management System',
+                        totalClasses: summary?.totalClasses || 0,
+                        totalStudents: summary?.totalStudents || 0,
+                        totalSchools: report?.totalSchools || 0,
+                        attendanceSummary: {
+                          present: summary?.attendanceSummary?.present || 0,
+                          absent: summary?.attendanceSummary?.absent || 0,
+                          late: summary?.attendanceSummary?.late || 0,
+                          attendanceRate: summary?.attendanceSummary?.attendanceRate || 0
+                        },
+                        marksSummary: {
+                          average: summary?.marksSummary?.average || 0,
+                          highest: summary?.marksSummary?.highest || 0,
+                          lowest: summary?.marksSummary?.lowest || 0
+                        },
+                        schools: schools,
+                        generatedAt: report?.generatedAt || new Date().toISOString(),
+                        generatedBy: report?.generatedBy || 'School Management System'
+                      }
+                      
+                      setSchoolReport(safeReport)
                     } catch (error) {
-                      console.error('Error generating attendance report:', error)
-                      alert('Failed to generate attendance report')
+                      console.error('Error generating school report:', error)
+                      setError('Failed to generate school report: ' + (error.response?.data?.message || error.message))
+                    } finally {
+                      setLoading(false)
                     }
                   }}
                   className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
-                    <span className="text-2xl mb-2 block">📋</span>
-                    <h4 className="font-medium">Attendance Report</h4>
-                    <p className="text-sm text-blue-200 mt-1">Generate attendance summary</p>
+                    <span className="text-2xl mb-2 block">🏫</span>
+                    <h4 className="font-medium">School Report</h4>
+                    <p className="text-sm text-blue-200 mt-1">Complete school overview</p>
                   </div>
                 </button>
                 
+                {/* Marks Report */}
                 <button
                   onClick={async () => {
                     try {
-                      const report = await getClassPerformanceReportAdmin()
-                      console.log('Class performance report generated:', report)
-                      alert('Class performance report generated successfully!')
+                      setLoading(true)
+                      setError('')
+                      
+                      const schoolId = '68c547e28a9c12a9210a256f' // Replace with actual school ID
+                      const report = await reportsAPI.getMarksReport(schoolId)
+                      
+                      console.log('Marks report generated:', report)
+                      alert(`Marks Report Generated!\n\nSchool ID: ${report.schoolId}\nMarks Summary: ${JSON.stringify(report.marksSummary)}`)
                     } catch (error) {
-                      console.error('Error generating class performance report:', error)
-                      alert('Failed to generate class performance report')
+                      console.error('Error generating marks report:', error)
+                      setError('Failed to generate marks report: ' + (error.response?.data?.message || error.message))
+                    } finally {
+                      setLoading(false)
                     }
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
                     <span className="text-2xl mb-2 block">📊</span>
-                    <h4 className="font-medium">Class Report</h4>
-                    <p className="text-sm text-green-200 mt-1">Generate class performance</p>
+                    <h4 className="font-medium">Marks Report</h4>
+                    <p className="text-sm text-green-200 mt-1">Academic performance analysis</p>
                   </div>
                 </button>
                 
+                {/* Attendance Report */}
                 <button
                   onClick={async () => {
                     try {
-                      const report = await getStudentPerformanceReportAdmin()
-                      console.log('Student performance report generated:', report)
-                      alert('Student performance report generated successfully!')
+                      setLoading(true)
+                      setError('')
+                      
+                      const schoolId = '68c547e28a9c12a9210a256f' // Replace with actual school ID
+                      const report = await reportsAPI.getAttendanceReportNew(schoolId)
+                      
+                      console.log('Attendance report generated:', report)
+                      alert(`Attendance Report Generated!\n\nSchool ID: ${report.schoolId}\nAttendance Summary: ${JSON.stringify(report.attendanceSummary)}`)
                     } catch (error) {
-                      console.error('Error generating student performance report:', error)
-                      alert('Failed to generate student performance report')
+                      console.error('Error generating attendance report:', error)
+                      setError('Failed to generate attendance report: ' + (error.response?.data?.message || error.message))
+                    } finally {
+                      setLoading(false)
                     }
                   }}
                   className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
-                    <span className="text-2xl mb-2 block">👤</span>
-                    <h4 className="font-medium">Student Report</h4>
-                    <p className="text-sm text-purple-200 mt-1">Generate student performance</p>
+                    <span className="text-2xl mb-2 block">📋</span>
+                    <h4 className="font-medium">Attendance Report</h4>
+                    <p className="text-sm text-purple-200 mt-1">Attendance analytics</p>
                   </div>
                 </button>
+              </div>
+            </div>
+
+
+            {/* PDF Download Section */}
+            <div className="bg-slate-700 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">📄 Download PDF Reports</h3>
+              <p className="text-slate-300 mb-4">Download comprehensive reports as PDF files for offline viewing and sharing.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* School Report PDF */}
+                <button
+                  onClick={async () => {
+                    try {
+                      setLoading(true)
+                      setError('')
+                      
+                      await reportsAPI.downloadSchoolReportPDF()
+                      
+                      // PDF will open automatically for printing/saving
+                    } catch (error) {
+                      console.error('Error downloading school report PDF:', error)
+                      setError('Failed to generate school report PDF: ' + (error.response?.data?.message || error.message))
+                    } finally {
+                      setLoading(false)
+                    }
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white p-4 rounded-lg transition-colors"
+                >
+                  <div className="text-center">
+                    <span className="text-2xl mb-2 block">📄</span>
+                    <h4 className="font-medium">School PDF</h4>
+                    <p className="text-sm text-red-200 mt-1">Complete overview</p>
+                  </div>
+                </button>
+                
+                {/* Marks Report PDF */}
+                <button
+                  onClick={async () => {
+                    try {
+                      setLoading(true)
+                      setError('')
+                      
+                      const schoolId = '68c547e28a9c12a9210a256f'
+                      await reportsAPI.downloadMarksReportPDF(schoolId)
+                      
+                      // PDF will open automatically for printing/saving
+                    } catch (error) {
+                      console.error('Error downloading marks report PDF:', error)
+                      setError('Failed to generate marks report PDF: ' + (error.response?.data?.message || error.message))
+                    } finally {
+                      setLoading(false)
+                    }
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg transition-colors"
+                >
+                  <div className="text-center">
+                    <span className="text-2xl mb-2 block">📄</span>
+                    <h4 className="font-medium">Marks PDF</h4>
+                    <p className="text-sm text-green-200 mt-1">Academic performance</p>
+                  </div>
+                </button>
+                
+                {/* Attendance Report PDF */}
+                <button
+                  onClick={async () => {
+                    try {
+                      setLoading(true)
+                      setError('')
+                      
+                      const schoolId = '68c547e28a9c12a9210a256f'
+                      await reportsAPI.downloadAttendanceReportPDF(schoolId)
+                      
+                      // PDF will open automatically for printing/saving
+                    } catch (error) {
+                      console.error('Error downloading attendance report PDF:', error)
+                      setError('Failed to generate attendance report PDF: ' + (error.response?.data?.message || error.message))
+                    } finally {
+                      setLoading(false)
+                    }
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg transition-colors"
+                >
+                  <div className="text-center">
+                    <span className="text-2xl mb-2 block">📄</span>
+                    <h4 className="font-medium">Attendance PDF</h4>
+                    <p className="text-sm text-purple-200 mt-1">Attendance analytics</p>
+                  </div>
+                </button>
+                
+                {/* Class Reports PDF */}
+                <div className="bg-slate-600 rounded-lg p-4">
+                  <div className="text-center text-slate-400">
+                    <span className="text-2xl mb-2 block">📄</span>
+                    <h4 className="font-medium">Class PDFs</h4>
+                    <p className="text-sm text-slate-500 mt-1">Available per class</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Individual Class PDF Downloads */}
+            <div className="bg-slate-700 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">🎯 Download Class PDF Reports</h3>
+              <p className="text-slate-300 mb-4">Download individual class performance reports as PDF files.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {classes.map(cls => (
+                  <button
+                    key={cls._id}
+                    onClick={async () => {
+                      try {
+                        setLoading(true)
+                        setError('')
+                        
+                        await reportsAPI.downloadClassReportPDF(cls._id)
+                        
+                        // PDF will open automatically for printing/saving
+                      } catch (error) {
+                        console.error('Error downloading class report PDF:', error)
+                        setError('Failed to generate class report PDF: ' + (error.response?.data?.message || error.message))
+                      } finally {
+                        setLoading(false)
+                      }
+                    }}
+                    className="bg-slate-600 hover:bg-slate-500 text-white p-4 rounded-lg transition-colors text-left"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">{getClassName(cls)}</h4>
+                        <p className="text-slate-300 text-sm">{getSubjectName(cls)}</p>
+                        <p className="text-blue-400 text-xs mt-1">Click to download PDF</p>
+                      </div>
+                      <span className="text-2xl">📄</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Report History/Status */}
+            <div className="bg-slate-700 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">📈 Report Analytics</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-slate-600 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-white">{classes.length}</div>
+                  <div className="text-slate-400 text-sm">Classes Available</div>
+                </div>
+                <div className="bg-slate-600 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-white">{students.length}</div>
+                  <div className="text-slate-400 text-sm">Students Tracked</div>
+                </div>
+                <div className="bg-slate-600 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-white">{attendanceRecords.length}</div>
+                  <div className="text-slate-400 text-sm">Attendance Records</div>
+                </div>
+                <div className="bg-slate-600 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-white">{comments.length}</div>
+                  <div className="text-slate-400 text-sm">Comments</div>
+                </div>
               </div>
             </div>
           </div>

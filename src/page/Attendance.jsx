@@ -50,9 +50,12 @@ function Attendance() {
     present: 0,
     absent: 0,
     late: 0,
-    excused: 0
+    excused: 0,
+    attendanceRate: 0
   })
   const [autoSave, setAutoSave] = useState(false)
+  const [updatingStudents, setUpdatingStudents] = useState(new Set())
+  const [pendingRequests, setPendingRequests] = useState(new Map())
 
   // Load classes and students on component mount
   useEffect(() => {
@@ -60,25 +63,20 @@ function Attendance() {
     loadStudents()
   }, [])
 
-  // Load attendance records when classes, date, or selectedClass changes
+  // Load attendance records and summary when classes, date, or selectedClass changes
   useEffect(() => {
     if (classes.length > 0 && attendanceDate) {
-      if (selectedClass) {
-        loadAttendanceRecords()
-      } else {
-        loadAllAttendanceRecords()
-      }
-      // Also load attendance summary
-      if (selectedClass) {
-        const selectedClassData = classes.find(cls => cls.className === selectedClass);
-        if (selectedClassData) {
-          loadAttendanceSummary(selectedClassData._id, attendanceDate);
-        }
-      } else {
-        loadAttendanceSummaryForAllClasses(attendanceDate);
-      }
+      console.log('=== DATE CHANGED ===')
+      console.log('Selected date:', attendanceDate)
+      console.log('Available classes:', classes.length)
+      
+      // Load attendance records for the selected date
+      loadAllAttendanceRecords()
+      
+      // Load attendance summary using the API
+      loadAttendanceSummaryForAllClasses(attendanceDate)
     }
-  }, [classes, attendanceDate, selectedClass])
+  }, [classes, attendanceDate])
 
 
   const loadClasses = async () => {
@@ -125,8 +123,9 @@ function Attendance() {
       // Pass the attendanceDate to filter by specific date
       const response = await attendanceAPI.getAttendanceByClass(targetClassId, attendanceDate)
       
-      // Only update records if we're loading for the selected class
-      if (!classId && selectedClass) {
+      // Always update records when loading for a specific class
+      if (classId) {
+        // Loading for a specific class (from Take Attendance button)
       setAttendanceRecords(response)
       
       // Create a map of student attendance for easy lookup
@@ -139,13 +138,27 @@ function Attendance() {
         }
       })
       setStudentAttendance(attendanceMap)
+      } else if (selectedClass) {
+        // Loading for the currently selected class
+        setAttendanceRecords(response)
+        
+        // Create a map of student attendance for easy lookup
+        const attendanceMap = {}
+        response.forEach(record => {
+          attendanceMap[record.studentId] = {
+            status: record.status,
+            remarks: record.remarks,
+            _id: record._id
+          }
+        })
+        setStudentAttendance(attendanceMap)
       }
       
       return response
       
     } catch (error) {
       console.error('Error loading attendance records:', error)
-      if (!classId && selectedClass) {
+      if (classId || selectedClass) {
       setAttendanceRecords([])
       setStudentAttendance({})
       }
@@ -156,18 +169,32 @@ function Attendance() {
   // Load attendance records for all classes to show counts in Classes Overview
   const loadAllAttendanceRecords = async () => {
     try {
+      console.log('Loading all attendance records for date:', attendanceDate)
       const allRecords = []
       
       // Load attendance for each class
       for (const cls of classes) {
         try {
+          console.log(`=== LOADING CLASS ${cls.className} ===`)
+          console.log(`Class ID: ${cls._id}`)
+          console.log(`Date: ${attendanceDate}`)
+          
           const response = await attendanceAPI.getAttendanceByClass(cls._id, attendanceDate)
+          console.log(`Got ${response.length} records for class ${cls.className}`)
+          console.log('Response data:', response)
+          
+          if (response.length > 0) {
+            console.log('First record structure:', response[0])
+            console.log('Record statuses:', response.map(r => r.status))
+          }
+          
           allRecords.push(...response)
         } catch (error) {
           console.error(`Error loading attendance for class ${cls._id}:`, error)
         }
       }
       
+      console.log('Total attendance records loaded:', allRecords.length, allRecords)
       setAttendanceRecords(allRecords)
       
     } catch (error) {
@@ -175,46 +202,96 @@ function Attendance() {
     }
   }
 
-  // Load attendance summary for a specific class and date
+  // Load attendance summary for a specific class and date using the API
   const loadAttendanceSummary = async (classId, date) => {
     try {
+      console.log('Loading attendance summary for class:', classId, 'date:', date)
       const summary = await attendanceAPI.getAttendanceSummary(classId, date);
-      setAttendanceSummary(summary);
-      console.log('Attendance summary loaded:', summary);
+      console.log('Raw summary from backend:', summary)
+      
+      // Map backend response to frontend format
+      const mappedSummary = {
+        total: summary.totalStudents || summary.total || 0,
+        present: summary.present || 0,
+        absent: summary.absent || 0,
+        late: summary.late || 0,
+        excused: summary.excused || 0,
+        attendanceRate: summary.attendanceRate || 0
+      }
+      
+      console.log('Mapped summary:', mappedSummary)
+      setAttendanceSummary(mappedSummary);
+      return mappedSummary;
     } catch (error) {
       console.error('Error loading attendance summary:', error);
+      return null;
     }
   };
 
-  // Load attendance summary for all classes combined
+  // Load attendance summary for all classes using the API
   const loadAttendanceSummaryForAllClasses = async (date) => {
     try {
-      let totalSummary = {
+      console.log('Loading attendance summary for all classes on date:', date)
+      
+      // Create a summary that shows data per class for the selected date
+      const summary = {
         total: 0,
         present: 0,
         absent: 0,
         late: 0,
-        excused: 0
+        excused: 0,
+        attendanceRate: 0,
+        classBreakdown: [] // This will hold data per class
       };
 
-      // Get summary for each class and combine them
+      // Load summary for each class using the API
+      const classSummaries = [];
       for (const cls of classes) {
         try {
-          const summary = await attendanceAPI.getAttendanceSummary(cls._id, date);
-          totalSummary.total += summary.total || 0;
-          totalSummary.present += summary.present || 0;
-          totalSummary.absent += summary.absent || 0;
-          totalSummary.late += summary.late || 0;
-          totalSummary.excused += summary.excused || 0;
+          console.log(`Loading summary for class ${cls.className} (${cls._id})`)
+          const classSummary = await loadAttendanceSummary(cls._id, date);
+          
+          if (classSummary) {
+            // Add class info to the summary
+            const classData = {
+              classId: cls._id,
+              className: cls.className,
+              total: classSummary.total,
+              present: classSummary.present,
+              absent: classSummary.absent,
+              late: classSummary.late,
+              excused: classSummary.excused,
+              attendanceRate: classSummary.attendanceRate
+            };
+            
+            classSummaries.push(classData);
+            
+            // Add to overall totals
+            summary.total += classSummary.total;
+            summary.present += classSummary.present;
+            summary.absent += classSummary.absent;
+            summary.late += classSummary.late;
+            summary.excused += classSummary.excused;
+            
+            console.log(`Added class summary for ${cls.className}:`, classData)
+          }
         } catch (error) {
-          console.error(`Error loading summary for class ${cls._id}:`, error);
+          console.error(`Error loading summary for class ${cls._id}:`, error)
         }
       }
 
-      setAttendanceSummary(totalSummary);
-      console.log('Combined attendance summary loaded:', totalSummary);
+      // Set class breakdown
+      summary.classBreakdown = classSummaries;
+
+      // Calculate overall attendance rate
+      if (summary.total > 0) {
+        summary.attendanceRate = Math.round((summary.present / summary.total) * 100);
+      }
+
+      console.log('API-based attendance summary with class breakdown:', summary)
+      setAttendanceSummary(summary);
     } catch (error) {
-      console.error('Error loading combined attendance summary:', error);
+      console.error('Error loading API-based attendance summary:', error);
     }
   };
 
@@ -375,19 +452,38 @@ function Attendance() {
   }
 
   const toggleStudentAttendance = async (studentId, status, classId = null) => {
-    setLoading(true)
+    // STRICT DUPLICATE PREVENTION - Multiple layers of protection
+    const requestKey = `${studentId}-${status}-${attendanceDate}`
+    
+    // 1. Check if student is already being updated
+    if (updatingStudents.has(studentId)) {
+      return
+    }
+    
+    // 2. Check if same request is already pending
+    if (pendingRequests.has(requestKey)) {
+      return
+    }
+    
+    // 3. Check if we're already in the middle of updating this student
+    const currentStatus = studentAttendance[studentId]?.status
+    if (currentStatus === status) {
+      return
+    }
+
+    // Add student to updating set and request to pending map
+    setUpdatingStudents(prev => new Set(prev).add(studentId))
+    setPendingRequests(prev => new Map(prev).set(requestKey, true))
     setError('')
 
     try {
-      // Determine which class to use - either from parameter or selectedClass
+      // Determine which class to use
       let targetClassId = classId
       let selectedClassData = null
       
       if (classId) {
-        // If classId is provided (from Students Modal), use it directly
         selectedClassData = classes.find(cls => cls._id === classId)
       } else if (selectedClass) {
-        // If selectedClass is set (from main attendance view), use it
         selectedClassData = classes.find(cls => cls.className === selectedClass)
         targetClassId = selectedClassData?._id
       } else {
@@ -402,56 +498,64 @@ function Attendance() {
         return
       }
 
-      // Prepare attendance data according to CreateAttendanceDto
+      // Update local state immediately for better UX
+      const updatedAttendanceMap = {
+        ...studentAttendance,
+        [studentId]: {
+          status: status,
+          remarks: status === 'late' ? 'Late arrival' : status === 'excused' ? 'Excused absence' : '',
+          _id: studentAttendance[studentId]?._id || 'temp'
+        }
+      }
+      setStudentAttendance(updatedAttendanceMap)
+
+      // Prepare attendance data for bulk API
       const attendanceData = {
         studentId: studentId,
         classId: targetClassId,
-        schoolId: student.schoolId || '68c547e28a9c12a9210a256f', // Use a real MongoDB ObjectId format
+        schoolId: student.schoolId || '68c547e28a9c12a9210a256f',
         date: attendanceDate,
         status: status,
         remarks: status === 'late' ? 'Late arrival' : status === 'excused' ? 'Excused absence' : ''
       }
 
-      // Check if attendance record already exists for this student/date
-      const existingRecord = attendanceRecords.find(record => 
-        record.studentId === studentId && record.date === attendanceDate
-      )
+      // Use bulk API to prevent duplicates (backend handles cleanup)
+      const response = await attendanceAPI.createBulkAttendance([attendanceData])
 
-      let response
-      if (existingRecord) {
-        // Update existing record
-        response = await attendanceAPI.updateAttendance(existingRecord._id, attendanceData)
-      } else {
-        // Create new record
-        response = await attendanceAPI.createAttendance(attendanceData)
-      }
-
-      console.log('Attendance updated successfully:', response)
-      console.log('Setting student attendance to:', status, 'for student:', studentId)
-
-      // Update local state
-      const updatedAttendanceMap = {
-        ...studentAttendance,
-        [studentId]: {
-          status: status,
-          remarks: attendanceData.remarks,
-          _id: response._id
+      // Update the attendance record with the actual response
+      if (response && response.length > 0) {
+        const updatedAttendanceMapWithId = {
+          ...studentAttendance,
+          [studentId]: {
+            status: status,
+            remarks: attendanceData.remarks,
+            _id: response[0]._id
+          }
         }
-      }
-      console.log('Updated attendance map:', updatedAttendanceMap)
-      setStudentAttendance(updatedAttendanceMap)
+        setStudentAttendance(updatedAttendanceMapWithId)
 
-      // Update attendance records - remove old record and add new one
-      const updatedRecords = attendanceRecords.filter(record => 
-        !(record.studentId === studentId && record.date === attendanceDate)
-      )
-      updatedRecords.push(response)
-      setAttendanceRecords(updatedRecords)
+        // Update attendance records
+        const updatedRecords = attendanceRecords.filter(record => 
+          !(record.studentId === studentId && record.date === attendanceDate)
+        )
+        updatedRecords.push(response[0])
+        setAttendanceRecords(updatedRecords)
+      }
 
       setSuccess(`Student attendance updated to ${status}!`)
+      
+      // Refresh the attendance summary using the API
+      await loadAttendanceSummaryForAllClasses(attendanceDate)
 
     } catch (error) {
       console.error('Attendance update error:', error)
+      
+      // Revert local state on error
+      const revertedAttendanceMap = {
+        ...studentAttendance,
+        [studentId]: studentAttendance[studentId] || { status: 'absent', remarks: '', _id: null }
+      }
+      setStudentAttendance(revertedAttendanceMap)
       
       let errorMessage = 'Failed to update attendance. Please try again.'
       
@@ -465,7 +569,17 @@ function Attendance() {
       
       setError(errorMessage)
     } finally {
-      setLoading(false)
+      // Clean up: Remove student from updating set and request from pending map
+      setUpdatingStudents(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(studentId)
+        return newSet
+      })
+      setPendingRequests(prev => {
+        const newMap = new Map(prev)
+        newMap.delete(requestKey)
+        return newMap
+      })
     }
   }
 
@@ -497,13 +611,12 @@ function Attendance() {
       
       setSuccess('Attendance saved successfully!')
       
-      // Reload attendance records to update the counts
+      // Reload attendance records and summary to update the counts
       await loadAllAttendanceRecords()
+      await loadAttendanceSummaryForAllClasses(attendanceDate)
       
-      // Navigate to success page after a short delay
-      setTimeout(() => {
+      // Navigate to success page immediately
         navigate('/success')
-      }, 2000)
 
     } catch (error) {
       console.error('Save attendance error:', error)
@@ -567,22 +680,51 @@ function Attendance() {
     return schoolId
   }
 
-  // Calculate attendance summary
+  // Calculate attendance summary based on selected date
   const calculateAttendanceSummary = () => {
+    if (!attendanceDate) return
+    
     const summary = {
-      total: studentsInSelectedClass.length,
+      total: 0,
       present: 0,
       absent: 0,
       late: 0,
-      excused: 0
+      excused: 0,
+      attendanceRate: 0
     }
 
-    studentsInSelectedClass.forEach(student => {
-      const status = studentAttendance[student._id]?.status || 'absent'
-      summary[status]++
+    console.log('Calculating summary for date:', attendanceDate)
+    console.log('Available attendance records:', attendanceRecords)
+
+    // Calculate based on attendance records for the selected date ONLY
+    attendanceRecords.forEach(record => {
+      // Fix date comparison - handle both ISO datetime and date string formats
+      const recordDate = new Date(record.date).toISOString().split('T')[0]
+      const selectedDate = new Date(attendanceDate).toISOString().split('T')[0]
+      const dateMatch = recordDate === selectedDate
+      
+      console.log('Checking record:', {
+        recordDate: record.date,
+        recordDateNormalized: recordDate,
+        selectedDate: attendanceDate,
+        selectedDateNormalized: selectedDate,
+        matches: dateMatch,
+        status: record.status
+      })
+      
+      if (dateMatch) {
+        summary.total++
+        summary[record.status]++
+      }
     })
 
+    // Calculate attendance rate
+    if (summary.total > 0) {
+      summary.attendanceRate = Math.round((summary.present / summary.total) * 100);
+    }
+
     setAttendanceSummary(summary)
+    console.log('Calculated attendance summary for date:', attendanceDate, summary)
   }
 
   // Bulk attendance actions
@@ -640,7 +782,9 @@ function Attendance() {
       setAttendanceRecords(updatedRecords)
 
       setSuccess(`All students marked as ${status}!`)
-      calculateAttendanceSummary()
+      
+      // Refresh the attendance summary using the API
+      await loadAttendanceSummaryForAllClasses(attendanceDate)
 
     } catch (error) {
       console.error('Bulk attendance error:', error)
@@ -652,14 +796,20 @@ function Attendance() {
 
   const selectedClassData = classes.find(cls => cls.className === selectedClass)
   const studentsInSelectedClass = selectedClassData ? 
-    students.filter(student => student.classId === selectedClassData._id) : []
+    students.filter(student => {
+      const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+      console.log('Filtering students:', {
+        selectedClass,
+        selectedClassData: selectedClassData?._id,
+        studentClassId,
+        studentName: student.studentName,
+        matches: studentClassId === selectedClassData._id
+      })
+      return studentClassId === selectedClassData._id
+    }) : []
 
-  // Update attendance summary when studentAttendance changes
-  useEffect(() => {
-    if (studentsInSelectedClass.length > 0) {
-      calculateAttendanceSummary()
-    }
-  }, [studentAttendance, studentsInSelectedClass])
+  // Note: Attendance summary is now loaded via API in loadAttendanceSummaryForAllClasses
+  // No need for manual calculation since we're using the backend API
 
   return (
     <div className='min-h-screen bg-slate-800 px-4 py-8'>
@@ -673,32 +823,32 @@ function Attendance() {
           </div>
         )}
 
+
         {/* Error Message */}
         {error && (
           <div className='bg-red-500/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg text-sm mb-6'>
             {error}
           </div>
         )}
-
-        {/* Classes Overview */}
+        
         <div className="bg-slate-700 rounded-lg p-6 mb-8">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-white">Classes Overview</h3>
             <div className="flex space-x-3">
-              <button
-                onClick={() => setShowCreateClassModal(true)}
+                <button
+                  onClick={() => setShowCreateClassModal(true)}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
-              >
+                >
                 + Add Class
-              </button>
-              <button
-                onClick={() => setShowAddStudentModal(true)}
+                </button>
+                <button
+                  onClick={() => setShowAddStudentModal(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
-              >
-                + Add Student
-              </button>
+                >
+                  + Add Student
+                </button>
+              </div>
             </div>
-          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {classes.slice(0, 6).map(cls => {
               const classStudents = students.filter(student => {
@@ -709,7 +859,7 @@ function Attendance() {
               
               return (
                 <div 
-                  key={cls._id} 
+                  key={cls._id}
                   className="bg-slate-600 rounded-lg p-4 hover:bg-slate-500 transition-colors"
                 >
                   <div className="flex justify-between items-start mb-3">
@@ -717,7 +867,7 @@ function Attendance() {
                       <h4 className="text-white font-medium">{getClassName(cls)}</h4>
                       <p className="text-slate-300 text-sm">{getSubjectName(cls)}</p>
                       <p className="text-slate-400 text-xs">Room: {cls.classRoom || 'N/A'}</p>
-                    </div>
+                  </div>
                     <div className="text-right">
                       <p className="text-slate-400 text-xs">ID: {cls._id}</p>
                       <p className="text-slate-400 text-xs">{studentCount} students</p>
@@ -735,13 +885,49 @@ function Attendance() {
                       className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm transition-colors"
                     >
                       👥 View Students
-                    </button>
+                </button>
                     <button
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation()
                         if (studentCount > 0) {
-                          setSelectedClass(getClassName(cls))
-                          setSuccess(`Selected ${getClassName(cls)} for attendance!`)
+                          const className = getClassName(cls)
+                          
+                          // Save attendance directly and show summary
+                          try {
+                            // First load current attendance data
+                            await loadAttendanceRecords(cls._id)
+                            
+                            // Then save the attendance
+                            const classStudents = students.filter(student => {
+                              const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                              return studentClassId === cls._id
+                            })
+                            
+                            // Prepare bulk attendance data
+                            const attendanceRecords = classStudents.map(student => ({
+                              studentId: student._id,
+                              classId: cls._id,
+                              schoolId: student.schoolId || '68c547e28a9c12a9210a256f',
+                              date: attendanceDate,
+                              status: studentAttendance[student._id]?.status || 'absent',
+                              remarks: studentAttendance[student._id]?.remarks || ''
+                            }))
+
+                            console.log('Saving bulk attendance data:', attendanceRecords)
+                            const response = await attendanceAPI.createBulkAttendance(attendanceRecords)
+                            console.log('Bulk attendance saved successfully:', response)
+                            
+                            // Load updated summary
+                            await loadAttendanceSummary(cls._id, attendanceDate)
+                            
+                            setSuccess(`Attendance for ${className} saved successfully! Summary updated.`)
+                            
+                            // Navigate to success page
+                            navigate('/success')
+                          } catch (error) {
+                            console.error('Error saving attendance:', error)
+                            setError('Failed to save attendance. Please try again.')
+                          }
                         } else {
                           setError('No students in this class. Add students first.')
                         }
@@ -753,9 +939,9 @@ function Attendance() {
                           : 'bg-gray-500 text-gray-300 cursor-not-allowed'
                       }`}
                     >
-                      📋 Take Attendance
+                      💾 Save Attendance
                     </button>
-                  </div>
+            </div>
                   
                   {/* Quick Stats */}
                   {studentCount > 0 && (
@@ -784,7 +970,7 @@ function Attendance() {
             )}
           </div>
         </div>
-        
+
         {/* Date-Specific Attendance Summary */}
         <div className="bg-slate-700 rounded-lg p-6 mb-8">
           <div className="flex justify-between items-center mb-6">
@@ -796,14 +982,14 @@ function Attendance() {
             </div>
             <div className="flex items-center space-x-4">
               <label className='text-white text-sm font-medium'>Select Date:</label>
-              <input
-                type='date'
-                value={attendanceDate}
-                onChange={(e) => setAttendanceDate(e.target.value)}
+                  <input
+                    type='date'
+                    value={attendanceDate}
+                    onChange={(e) => setAttendanceDate(e.target.value)}
                 className='px-4 py-2 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500'
-              />
-            </div>
-          </div>
+                  />
+                </div>
+              </div>
           
           {/* Selected Date Display */}
           <div className="bg-slate-600 rounded-lg p-4 mb-6">
@@ -820,7 +1006,7 @@ function Attendance() {
                 <p className="text-slate-400 text-sm">
                   Attendance records for this specific date
                 </p>
-              </div>
+            </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-white">
                   {(() => {
@@ -1001,11 +1187,47 @@ function Attendance() {
                       👥 View Students
                     </button>
                     <button
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation()
                         if (studentCount > 0) {
-                          setSelectedClass(getClassName(cls))
-                          setSuccess(`Selected ${getClassName(cls)} for attendance on ${new Date(attendanceDate).toLocaleDateString()}!`)
+                          const className = getClassName(cls)
+                          
+                          // Save attendance directly and show summary
+                          try {
+                            // First load current attendance data
+                            await loadAttendanceRecords(cls._id)
+                            
+                            // Then save the attendance
+                            const classStudents = students.filter(student => {
+                              const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                              return studentClassId === cls._id
+                            })
+                            
+                            // Prepare bulk attendance data
+                            const attendanceRecords = classStudents.map(student => ({
+                              studentId: student._id,
+                              classId: cls._id,
+                              schoolId: student.schoolId || '68c547e28a9c12a9210a256f',
+                              date: attendanceDate,
+                              status: studentAttendance[student._id]?.status || 'absent',
+                              remarks: studentAttendance[student._id]?.remarks || ''
+                            }))
+
+                            console.log('Saving bulk attendance data:', attendanceRecords)
+                            const response = await attendanceAPI.createBulkAttendance(attendanceRecords)
+                            console.log('Bulk attendance saved successfully:', response)
+                            
+                            // Load updated summary
+                            await loadAttendanceSummary(cls._id, attendanceDate)
+                            
+                            setSuccess(`Attendance for ${className} on ${new Date(attendanceDate).toLocaleDateString()} saved successfully! Summary updated.`)
+                            
+                            // Navigate to success page
+                            navigate('/success')
+                          } catch (error) {
+                            console.error('Error saving attendance:', error)
+                            setError('Failed to save attendance. Please try again.')
+                          }
                         } else {
                           setError('No students in this class. Add students first.')
                         }
@@ -1017,7 +1239,7 @@ function Attendance() {
                           : 'bg-gray-500 text-gray-300 cursor-not-allowed'
                       }`}
                     >
-                      📋 Take Attendance
+                      💾 Save Attendance
                     </button>
                   </div>
                 </div>
@@ -1090,83 +1312,34 @@ function Attendance() {
           </div>
         </div>
         
-        {/* Class Selection */}
-        <div className='mb-8'>
-          <div className='bg-slate-700 rounded-lg p-6'>
-            <div className='flex justify-between items-center mb-4'>
-              <h2 className='text-xl font-semibold text-white'>Select Class</h2>
-              <div className='flex space-x-3'>
-                <button
-                  onClick={() => setShowCreateClassModal(true)}
-                  className='bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200'
-                >
-                  + Create Class
-                </button>
-                <button
-                  onClick={() => setShowAddStudentModal(true)}
-                  className='bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200'
-                >
-                  + Add Student
-                </button>
-              </div>
-            </div>
-            <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
-              {classes.map(cls => (
-                <button
-                  key={cls._id}
-                  onClick={() => setSelectedClass(cls.className)}
-                  className={`p-4 rounded-lg border-2 transition-all ${
-                    selectedClass === cls.className
-                      ? 'border-green-500 bg-green-500/20 text-green-400'
-                      : 'border-slate-600 bg-slate-600 text-gray-300 hover:border-slate-500'
-                  }`}
-                >
-                  <div className='text-left'>
-                    <h3 className='font-semibold'>{cls.className}</h3>
-                    <p className='text-sm opacity-75'>{cls.subjectName}</p>
-                    <p className='text-xs opacity-60'>{cls.classRoom} | {cls.classCredit} credits</p>
-                    <p className='text-sm opacity-75 mt-1'>{cls.students || 0} students</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        {/* Date Selection and Class Info */}
-        {selectedClass && (
-          <div className='mb-6'>
-            <div className='bg-slate-700 rounded-lg p-6'>
-              <div className='flex justify-between items-center mb-4'>
-                <h2 className='text-xl font-semibold text-white'>
-                  Attendance for {selectedClass} ({studentsInSelectedClass.length} students)
-                </h2>
-                <div className='flex items-center space-x-4'>
-                  <label className='text-white text-sm font-medium'>Date:</label>
-                  <input
-                    type='date'
-                    value={attendanceDate}
-                    onChange={(e) => setAttendanceDate(e.target.value)}
-                    className='px-3 py-2 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500'
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Attendance Summary */}
         {attendanceDate && (
           <div className='bg-slate-700 rounded-lg p-6 mb-6'>
-            <h2 className='text-xl font-semibold text-white mb-4'>
-              📊 Attendance Summary for {new Date(attendanceDate).toLocaleDateString()}
-              {selectedClass ? ` - ${selectedClass}` : ' - All Classes'}
+            <div className="flex justify-between items-center mb-4">
+              <h2 className='text-xl font-semibold text-white'>
+              📊 Summary for {new Date(attendanceDate).toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
             </h2>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => loadAttendanceSummaryForAllClasses(attendanceDate)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
             
-            <div className='grid grid-cols-2 md:grid-cols-5 gap-4'>
+            <div className='grid grid-cols-2 md:grid-cols-5 gap-4 mb-6'>
               <div className='bg-slate-600 rounded-lg p-4 text-center'>
                 <div className='text-2xl font-bold text-white'>{attendanceSummary.total}</div>
-                <div className='text-slate-400 text-sm'>Total Records</div>
+                <div className='text-slate-400 text-sm'>Total Students</div>
               </div>
               <div className='bg-green-600 rounded-lg p-4 text-center'>
                 <div className='text-2xl font-bold text-white'>{attendanceSummary.present}</div>
@@ -1186,28 +1359,53 @@ function Attendance() {
               </div>
             </div>
             
-            {/* Show the exact format you want */}
-            <div className='mt-4 p-4 bg-slate-600 rounded-lg'>
-              <h3 className='text-lg font-semibold text-white mb-2'>Quick Summary</h3>
-              <div className='text-center'>
-                <p className='text-white text-lg'>
-                  <span className='text-green-400 font-bold'>{attendanceSummary.present}</span>/
-                  <span className='text-white font-bold'>{attendanceSummary.total}</span> Present
-                </p>
-                <p className='text-white text-lg'>
-                  <span className='text-red-400 font-bold'>{attendanceSummary.absent}</span>/
-                  <span className='text-white font-bold'>{attendanceSummary.total}</span> Absent
-                </p>
-                <p className='text-slate-400 text-sm mt-2'>
-                  On {new Date(attendanceDate).toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}
-                </p>
-              </div>
+            {/* Attendance Rate */}
+            <div className='bg-slate-600 rounded-lg p-4 text-center'>
+              <div className='text-3xl font-bold text-white'>{attendanceSummary.attendanceRate}%</div>
+              <div className='text-slate-400 text-sm'>Attendance Rate</div>
             </div>
+            
+            {/* Per-Class Breakdown */}
+            {attendanceSummary.classBreakdown && attendanceSummary.classBreakdown.length > 0 && (
+              <div className='mt-6'>
+                <h3 className='text-lg font-semibold text-white mb-4'>📋 Per-Class Breakdown</h3>
+                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+                  {attendanceSummary.classBreakdown.map(classData => (
+                    <div key={classData.classId} className='bg-slate-600 rounded-lg p-4'>
+                      <h4 className='text-white font-semibold mb-2'>{classData.className}</h4>
+                      <div className='space-y-2 text-sm'>
+                        <div className='flex justify-between'>
+                          <span className='text-slate-300'>Total:</span>
+                          <span className='text-white font-semibold'>{classData.total}</span>
+                        </div>
+                        <div className='flex justify-between'>
+                          <span className='text-green-300'>Present:</span>
+                          <span className='text-green-300 font-semibold'>{classData.present}</span>
+                        </div>
+                        <div className='flex justify-between'>
+                          <span className='text-red-300'>Absent:</span>
+                          <span className='text-red-300 font-semibold'>{classData.absent}</span>
+                        </div>
+                        <div className='flex justify-between'>
+                          <span className='text-yellow-300'>Late:</span>
+                          <span className='text-yellow-300 font-semibold'>{classData.late}</span>
+                        </div>
+                        <div className='flex justify-between'>
+                          <span className='text-blue-300'>Excused:</span>
+                          <span className='text-blue-300 font-semibold'>{classData.excused}</span>
+                        </div>
+                        <div className='flex justify-between border-t border-slate-500 pt-2'>
+                          <span className='text-slate-300'>Rate:</span>
+                          <span className='text-white font-bold'>
+                            {classData.total > 0 ? Math.round((classData.present / classData.total) * 100) : 0}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1325,43 +1523,55 @@ function Attendance() {
                     <div className='grid grid-cols-2 gap-2'>
                       <button
                         onClick={() => toggleStudentAttendance(student._id, 'present')}
+                        disabled={updatingStudents.has(student._id)}
                         className={`py-2 px-3 rounded text-sm font-medium transition-colors ${
                           status === 'present'
                             ? 'bg-green-600 text-white shadow-lg'
+                            : updatingStudents.has(student._id)
+                            ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
                             : 'bg-green-500 hover:bg-green-600 text-white hover:shadow-lg'
                         }`}
                       >
-                        ✓ Present
+                        {updatingStudents.has(student._id) ? '⏳' : '✓'} Present
                       </button>
                       <button
                         onClick={() => toggleStudentAttendance(student._id, 'late')}
+                        disabled={updatingStudents.has(student._id)}
                         className={`py-2 px-3 rounded text-sm font-medium transition-colors ${
                           status === 'late'
                             ? 'bg-yellow-600 text-white shadow-lg'
+                            : updatingStudents.has(student._id)
+                            ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
                             : 'bg-yellow-500 hover:bg-yellow-600 text-white hover:shadow-lg'
                         }`}
                       >
-                        ⏰ Late
+                        {updatingStudents.has(student._id) ? '⏳' : '⏰'} Late
                       </button>
                       <button
                         onClick={() => toggleStudentAttendance(student._id, 'excused')}
+                        disabled={updatingStudents.has(student._id)}
                         className={`py-2 px-3 rounded text-sm font-medium transition-colors ${
                           status === 'excused'
                             ? 'bg-blue-600 text-white shadow-lg'
+                            : updatingStudents.has(student._id)
+                            ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
                             : 'bg-blue-500 hover:bg-blue-600 text-white hover:shadow-lg'
                         }`}
                       >
-                        📝 Excused
+                        {updatingStudents.has(student._id) ? '⏳' : '📝'} Excused
                       </button>
                       <button
                         onClick={() => toggleStudentAttendance(student._id, 'absent')}
+                        disabled={updatingStudents.has(student._id)}
                         className={`py-2 px-3 rounded text-sm font-medium transition-colors ${
                           status === 'absent'
                             ? 'bg-red-600 text-white shadow-lg'
+                            : updatingStudents.has(student._id)
+                            ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
                             : 'bg-red-500 hover:bg-red-600 text-white hover:shadow-lg'
                         }`}
                       >
-                        ✗ Absent
+                        {updatingStudents.has(student._id) ? '⏳' : '✗'} Absent
                       </button>
                     </div>
                     
@@ -1706,43 +1916,55 @@ function Attendance() {
                             <div className="grid grid-cols-2 gap-1">
                               <button
                                 onClick={() => toggleStudentAttendance(student._id, 'present', selectedClassForStudents._id)}
+                                disabled={updatingStudents.has(student._id)}
                                 className={`py-1 px-2 rounded text-xs font-medium transition-colors ${
                                   studentAttendance[student._id]?.status === 'present'
                                     ? 'bg-green-600 text-white'
+                                    : updatingStudents.has(student._id)
+                                    ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
                                     : 'bg-green-500 hover:bg-green-600 text-white'
                                 }`}
                               >
-                                ✓ Present
+                                {updatingStudents.has(student._id) ? '⏳' : '✓'} Present
                               </button>
                               <button
                                 onClick={() => toggleStudentAttendance(student._id, 'late', selectedClassForStudents._id)}
+                                disabled={updatingStudents.has(student._id)}
                                 className={`py-1 px-2 rounded text-xs font-medium transition-colors ${
                                   studentAttendance[student._id]?.status === 'late'
                                     ? 'bg-yellow-600 text-white'
+                                    : updatingStudents.has(student._id)
+                                    ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
                                     : 'bg-yellow-500 hover:bg-yellow-600 text-white'
                                 }`}
                               >
-                                ⏰ Late
+                                {updatingStudents.has(student._id) ? '⏳' : '⏰'} Late
                               </button>
                               <button
                                 onClick={() => toggleStudentAttendance(student._id, 'excused', selectedClassForStudents._id)}
+                                disabled={updatingStudents.has(student._id)}
                                 className={`py-1 px-2 rounded text-xs font-medium transition-colors ${
                                   studentAttendance[student._id]?.status === 'excused'
                                     ? 'bg-blue-600 text-white'
+                                    : updatingStudents.has(student._id)
+                                    ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
                                     : 'bg-blue-500 hover:bg-blue-600 text-white'
                                 }`}
                               >
-                                📝 Excused
+                                {updatingStudents.has(student._id) ? '⏳' : '📝'} Excused
                               </button>
                               <button
                                 onClick={() => toggleStudentAttendance(student._id, 'absent', selectedClassForStudents._id)}
+                                disabled={updatingStudents.has(student._id)}
                                 className={`py-1 px-2 rounded text-xs font-medium transition-colors ${
                                   studentAttendance[student._id]?.status === 'absent'
                                     ? 'bg-red-600 text-white'
+                                    : updatingStudents.has(student._id)
+                                    ? 'bg-gray-500 text-gray-300 cursor-not-allowed'
                                     : 'bg-red-500 hover:bg-red-600 text-white'
                                 }`}
                               >
-                                ✗ Absent
+                                {updatingStudents.has(student._id) ? '⏳' : '✗'} Absent
                               </button>
                             </div>
                           </div>
@@ -1851,13 +2073,57 @@ function Attendance() {
                   Close
                 </button>
                 <button
-                  onClick={() => {
-                    setSelectedClass(getClassName(selectedClassForStudents))
-                    setShowStudentsModal(false)
+                  onClick={async () => {
+                    const className = getClassName(selectedClassForStudents)
+                    console.log('Save Attendance for This Class clicked:', {
+                      selectedClassForStudents,
+                      className,
+                      classId: selectedClassForStudents._id
+                    })
+                    
+                    // Save attendance directly and show summary
+                    try {
+                      // First load current attendance data
+                      await loadAttendanceRecords(selectedClassForStudents._id)
+                      
+                      // Then save the attendance
+                      const selectedClassData = classes.find(cls => cls._id === selectedClassForStudents._id)
+                      if (selectedClassData) {
+                        const classStudents = students.filter(student => {
+                          const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                          return studentClassId === selectedClassForStudents._id
+                        })
+                        
+                        // Prepare bulk attendance data
+                        const attendanceRecords = classStudents.map(student => ({
+                          studentId: student._id,
+                          classId: selectedClassData._id,
+                          schoolId: student.schoolId || '68c547e28a9c12a9210a256f',
+                          date: attendanceDate,
+                          status: studentAttendance[student._id]?.status || 'absent',
+                          remarks: studentAttendance[student._id]?.remarks || ''
+                        }))
+
+                        console.log('Saving bulk attendance data:', attendanceRecords)
+                        const response = await attendanceAPI.createBulkAttendance(attendanceRecords)
+                        console.log('Bulk attendance saved successfully:', response)
+                        
+                        // Load updated summary
+                        await loadAttendanceSummary(selectedClassForStudents._id, attendanceDate)
+                        
+                        setSuccess(`Attendance for ${className} saved successfully! Summary updated.`)
+                        
+                        // Navigate to success page
+                        navigate('/success')
+                      }
+                    } catch (error) {
+                      console.error('Error saving attendance:', error)
+                      setError('Failed to save attendance. Please try again.')
+                    }
                   }}
                   className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                 >
-                  Take Attendance for This Class
+                  Save Attendance
                 </button>
               </div>
             </div>

@@ -28,8 +28,18 @@ export const createBulkAttendance = async (attendanceRecords) => {
 
 export const getAttendanceRecords = async (filters = {}) => {
   try {
+    // Filter out empty strings and null values to prevent MongoDB ObjectId casting errors
+    const cleanFilters = Object.entries(filters).reduce((acc, [key, value]) => {
+      if (value !== '' && value !== null && value !== undefined) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+    
     console.log('Making get attendance records request to:', `${api.defaults.baseURL}/attendance`);
-    const response = await api.get('/attendance', { params: filters });
+    console.log('Original filters:', filters);
+    console.log('Clean filters:', cleanFilters);
+    const response = await api.get('/attendance', { params: cleanFilters });
     console.log('Get attendance records response:', response);
     return response.data;
   } catch (error) {

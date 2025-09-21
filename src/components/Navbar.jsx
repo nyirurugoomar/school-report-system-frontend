@@ -57,6 +57,16 @@ function Navbar() {
         >
           Attendance
         </Link>
+        <Link 
+          to="/marks" 
+          className={`px-4 py-2 rounded-md transition-colors ${
+            isActive('/marks') 
+              ? 'bg-slate-700 text-white' 
+              : 'text-gray-300 hover:text-white'
+          }`}
+        >
+          Marks
+        </Link>
         {isAdmin() && (
           <Link 
             to="/admin" 

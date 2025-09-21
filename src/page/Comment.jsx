@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as commentAPI from '../api/comment'
+import * as classAPI from '../api/class'
 
 function Comment() {
   const navigate = useNavigate()
@@ -15,13 +16,60 @@ function Comment() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [classes, setClasses] = useState([])
+  const [subjects, setSubjects] = useState([])
+  const [loadingData, setLoadingData] = useState(true)
+
+  // Load classes and extract subjects on component mount
+  useEffect(() => {
+    loadClassesAndSubjects()
+  }, [])
+
+  const loadClassesAndSubjects = async () => {
+    try {
+      setLoadingData(true)
+      const classesData = await classAPI.getClasses()
+      setClasses(classesData)
+      
+      // Extract unique subjects from classes
+      const uniqueSubjects = [...new Set(classesData.map(cls => cls.subjectName).filter(Boolean))]
+      setSubjects(uniqueSubjects)
+      
+      console.log('Loaded classes:', classesData)
+      console.log('Extracted subjects:', uniqueSubjects)
+    } catch (error) {
+      console.error('Error loading classes:', error)
+      // Fallback to mock data if API fails
+      const mockClasses = [
+        { _id: '1', className: 'Mathematics 101', subjectName: 'Mathematics', classRoom: 'Room 101', classCredit: '3' },
+        { _id: '2', className: 'Physics 201', subjectName: 'Physics', classRoom: 'Room 201', classCredit: '4' },
+        { _id: '3', className: 'Chemistry 301', subjectName: 'Chemistry', classRoom: 'Room 301', classCredit: '3' },
+        { _id: '4', className: 'Biology 401', subjectName: 'Biology', classRoom: 'Room 401', classCredit: '4' },
+        { _id: '5', className: 'English 101', subjectName: 'English', classRoom: 'Room 501', classCredit: '3' }
+      ]
+      setClasses(mockClasses)
+      setSubjects(['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English'])
+    } finally {
+      setLoadingData(false)
+    }
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData({
+    const newFormData = {
       ...formData,
       [name]: value
-    })
+    }
+    
+    // Auto-populate subject when class is selected
+    if (name === 'className' && value) {
+      const selectedClass = classes.find(cls => cls.className === value)
+      if (selectedClass) {
+        newFormData.subjectName = selectedClass.subjectName
+      }
+    }
+    
+    setFormData(newFormData)
     if (error) setError('')
   }
 
@@ -34,13 +82,13 @@ function Comment() {
     console.log('Form submitted with data:', formData)
 
     // Validation
-    if (!formData.className.trim()) {
-      setError('Class name is required')
+    if (!formData.className) {
+      setError('Please select a class')
       setLoading(false)
       return
     }
-    if (!formData.subjectName.trim()) {
-      setError('Subject name is required')
+    if (!formData.subjectName) {
+      setError('Please select a subject')
       setLoading(false)
       return
     }
@@ -52,8 +100,8 @@ function Comment() {
 
     try {
       const commentData = {
-        className: formData.className.trim(),
-        subjectName: formData.subjectName.trim(),
+        className: formData.className,
+        subjectName: formData.subjectName,
         numberOfStudents: parseInt(formData.numberOfStudents),
         successStory: formData.successStory.trim(),
         challenge: formData.challenge.trim(),
@@ -102,7 +150,7 @@ function Comment() {
   return (
     <div className='min-h-screen bg-slate-800 px-4 py-8'>
       <div className='max-w-4xl mx-auto'>
-        <h1 className='text-4xl font-bold text-white mb-8 text-center'>Please fill the Comment form</h1>
+        <h1 className='text-4xl font-bold text-white mb-8 text-center'>Make a daily attendance</h1>
         
         {success && (
           <div className='bg-green-500/20 border border-green-500 text-green-400 px-4 py-3 rounded-lg text-sm mb-6'>
@@ -115,32 +163,57 @@ function Comment() {
             {error}
           </div>
         )}
+
+        {loadingData && (
+          <div className='bg-blue-500/20 border border-blue-500 text-blue-400 px-4 py-3 rounded-lg text-sm mb-6'>
+            <div className="flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+              <span>Loading classes and subjects...</span>
+            </div>
+          </div>
+        )}
         
         <form onSubmit={handleSubmit} className='w-full space-y-6'>
           <div className='space-y-2'>
-            <label className='block text-white text-sm font-medium'>Enter Class Name *</label>
-            <input 
-              type="text" 
+            <label className='block text-white text-sm font-medium'>Select Class *</label>
+            <select 
               name="className"
               value={formData.className}
               onChange={handleChange}
-              placeholder='Enter Class Name'
               required
-              className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400'
-            />
+              disabled={loadingData}
+              className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-slate-600 disabled:text-slate-400'
+            >
+              <option value=''>
+                {loadingData ? 'Loading classes...' : 'Select a class'}
+              </option>
+              {classes.map(cls => (
+                <option key={cls._id} value={cls.className}>
+                  {cls.className} - {cls.subjectName} ({cls.classRoom})
+                </option>
+              ))}
+            </select>
           </div>
           
           <div className='space-y-2'>
-            <label className='block text-white text-sm font-medium'>Enter Subject Name *</label>
-            <input 
-              type="text" 
+            <label className='block text-white text-sm font-medium'>Select Subject *</label>
+            <select 
               name="subjectName"
               value={formData.subjectName}
               onChange={handleChange}
-              placeholder='Enter Subject Name'
               required
-              className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400'
-            />
+              disabled={loadingData}
+              className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-slate-600 disabled:text-slate-400'
+            >
+              <option value=''>
+                {loadingData ? 'Loading subjects...' : 'Select a subject'}
+              </option>
+              {subjects.map(subject => (
+                <option key={subject} value={subject}>
+                  {subject}
+                </option>
+              ))}
+            </select>
           </div>
           
           <div className='space-y-2'>

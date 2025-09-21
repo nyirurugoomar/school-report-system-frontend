@@ -6,6 +6,9 @@ import MainLayout from './layouts/MainLayout'
 import Attendance from './page/Attendance'
 import Success from './page/Success'
 import Admin from './page/Admin'
+import Marks from './page/Marks'
+import CreateMarks from './page/CreateMarks'
+import EditMarks from './page/EditMarks'
 import ProtectedRoute from './components/ProtectedRoute'
 function App() {
   return (
@@ -20,6 +23,9 @@ function App() {
         <Route path='/main' element={<MainLayout />}>
           <Route path='comment' element={<Comment />} />
           <Route path='attendance' element={<Attendance />} />
+          <Route path='marks' element={<Marks />} />
+          <Route path='create-marks' element={<CreateMarks />} />
+          <Route path='edit-marks/:marksId' element={<EditMarks />} />
           <Route path='admin' element={
           <ProtectedRoute requiredRole="admin" fallbackPath="comment">
             <Admin />
@@ -33,6 +39,15 @@ function App() {
         </Route>
         <Route path='/attendance' element={<MainLayout />}>
           <Route index element={<Attendance />} />
+        </Route>
+        <Route path='/marks' element={<MainLayout />}>
+          <Route index element={<Marks />} />
+        </Route>
+        <Route path='/create-marks' element={<MainLayout />}>
+          <Route index element={<CreateMarks />} />
+        </Route>
+        <Route path='/edit-marks/:marksId' element={<MainLayout />}>
+          <Route index element={<EditMarks />} />
         </Route>
         <Route path='/admin' element={<MainLayout />}>
           <Route index element={
