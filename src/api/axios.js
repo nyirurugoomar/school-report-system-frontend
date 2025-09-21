@@ -1,14 +1,14 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: 'http://localhost:3000',
+  baseURL: 'https://school-report-system-bc.onrender.com/',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Request interceptor
+// Request interceptor  
 api.interceptors.request.use(
   (config) => {
     // Add auth token if available
