@@ -17,51 +17,64 @@ function Comment() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [classes, setClasses] = useState([])
-  const [subjects, setSubjects] = useState([])
+  const [availableClasses, setAvailableClasses] = useState([])
+  const [availableSubjects, setAvailableSubjects] = useState([])
   const [availableSchools, setAvailableSchools] = useState([])
   const [loadingData, setLoadingData] = useState(true)
+  const [selectedSchool, setSelectedSchool] = useState('')
+  const [selectedClass, setSelectedClass] = useState('')
+  const [selectedSubject, setSelectedSubject] = useState('')
 
-  // Load classes and extract subjects on component mount
+  // Load initial data on component mount
   useEffect(() => {
-    loadClassesAndSubjects()
+    loadInitialData()
   }, [])
 
-  const loadClassesAndSubjects = async () => {
+  const loadInitialData = async () => {
     try {
       setLoadingData(true)
-      
-      // Load classes
-      const classesData = await classAPI.getClasses()
-      setClasses(classesData)
-      
-      // Extract unique subjects from classes
-      const uniqueSubjects = [...new Set(classesData.map(cls => cls.subjectName).filter(Boolean))]
-      setSubjects(uniqueSubjects)
       
       // Load available schools for comments
       const schoolsResponse = await commentAPI.getAvailableSchools()
       const schools = schoolsResponse?.data || schoolsResponse || []
       setAvailableSchools(schools)
       
-      console.log('Loaded classes:', classesData)
-      console.log('Extracted subjects:', uniqueSubjects)
       console.log('Available schools:', schools)
     } catch (error) {
-      console.error('Error loading data:', error)
-      // Fallback to mock data if API fails
-      const mockClasses = [
-        { _id: '1', className: 'Mathematics 101', subjectName: 'Mathematics', classRoom: 'Room 101', classCredit: '3' },
-        { _id: '2', className: 'Physics 201', subjectName: 'Physics', classRoom: 'Room 201', classCredit: '4' },
-        { _id: '3', className: 'Chemistry 301', subjectName: 'Chemistry', classRoom: 'Room 301', classCredit: '3' },
-        { _id: '4', className: 'Biology 401', subjectName: 'Biology', classRoom: 'Room 401', classCredit: '4' },
-        { _id: '5', className: 'English 101', subjectName: 'English', classRoom: 'Room 501', classCredit: '3' }
-      ]
-      setClasses(mockClasses)
-      setSubjects(['Mathematics', 'Physics', 'Chemistry', 'Biology', 'English'])
+      console.error('Error loading schools:', error)
       setAvailableSchools([])
     } finally {
       setLoadingData(false)
+    }
+  }
+
+  const handleSchoolChange = async (schoolId) => {
+    if (schoolId) {
+      try {
+        setLoadingData(true)
+        
+        // Fetch classes for the selected school
+        const classesResponse = await commentAPI.getSchoolClasses(schoolId)
+        const classes = classesResponse?.data || []
+        setAvailableClasses(classes)
+        
+        // Fetch subjects for the selected school
+        const subjectsResponse = await commentAPI.getSchoolSubjects(schoolId)
+        const subjects = subjectsResponse?.data || []
+        setAvailableSubjects(subjects)
+        
+        console.log('Classes for school:', classes)
+        console.log('Subjects for school:', subjects)
+      } catch (error) {
+        console.error('Error fetching classes/subjects for school:', error)
+        setAvailableClasses([])
+        setAvailableSubjects([])
+      } finally {
+        setLoadingData(false)
+      }
+    } else {
+      setAvailableClasses([])
+      setAvailableSubjects([])
     }
   }
 
@@ -70,14 +83,6 @@ function Comment() {
     const newFormData = {
       ...formData,
       [name]: value
-    }
-    
-    // Auto-populate subject when class is selected
-    if (name === 'className' && value) {
-      const selectedClass = classes.find(cls => cls.className === value)
-      if (selectedClass) {
-        newFormData.subjectName = selectedClass.subjectName
-      }
     }
     
     setFormData(newFormData)
@@ -194,17 +199,22 @@ function Comment() {
         <form onSubmit={handleSubmit} className='w-full space-y-6'>
           <div className='space-y-2'>
             <label className='block text-white text-sm font-medium'>Select School *</label>
-            <select 
-              name="schoolId"
-              value={formData.schoolId}
-              onChange={handleChange}
+            <select
+              value={selectedSchool}
+              onChange={(e) => {
+                setSelectedSchool(e.target.value)
+                setFormData({...formData, schoolId: e.target.value})
+                handleSchoolChange(e.target.value)
+                // Reset class and subject selections
+                setSelectedClass('')
+                setSelectedSubject('')
+                setFormData(prev => ({...prev, className: '', subjectName: ''}))
+              }}
+              className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500"
               required
               disabled={loadingData}
-              className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-slate-600 disabled:text-slate-400'
             >
-              <option value=''>
-                {loadingData ? 'Loading schools...' : 'Select a school'}
-              </option>
+              <option value="">Select a school</option>
               {availableSchools.map(school => (
                 <option key={school._id} value={school._id}>
                   {school.name}
@@ -220,44 +230,68 @@ function Comment() {
           
           <div className='space-y-2'>
             <label className='block text-white text-sm font-medium'>Select Class *</label>
-            <select 
-              name="className"
-              value={formData.className}
-              onChange={handleChange}
+            <select
+              value={selectedClass}
+              onChange={(e) => {
+                setSelectedClass(e.target.value)
+                setFormData({...formData, className: e.target.value})
+              }}
+              className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500"
               required
-              disabled={loadingData}
-              className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-slate-600 disabled:text-slate-400'
+              disabled={!selectedSchool || loadingData}
             >
-              <option value=''>
-                {loadingData ? 'Loading classes...' : 'Select a class'}
+              <option value="">
+                {selectedSchool ? 'Select a class' : 'Select a school first'}
               </option>
-              {classes.map(cls => (
+              {availableClasses.map(cls => (
                 <option key={cls._id} value={cls.className}>
-                  {cls.className} - {cls.subjectName} ({cls.classRoom})
+                  {cls.className} - {cls.subjectName}
                 </option>
               ))}
             </select>
+            {!selectedSchool && (
+              <p className='text-yellow-400 text-sm mt-1'>
+                Please select a school first to see available classes.
+              </p>
+            )}
+            {selectedSchool && availableClasses.length === 0 && !loadingData && (
+              <p className='text-yellow-400 text-sm mt-1'>
+                No classes found for the selected school.
+              </p>
+            )}
           </div>
           
           <div className='space-y-2'>
             <label className='block text-white text-sm font-medium'>Select Subject *</label>
-            <select 
-              name="subjectName"
-              value={formData.subjectName}
-              onChange={handleChange}
+            <select
+              value={selectedSubject}
+              onChange={(e) => {
+                setSelectedSubject(e.target.value)
+                setFormData({...formData, subjectName: e.target.value})
+              }}
+              className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500"
               required
-              disabled={loadingData}
-              className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-slate-600 disabled:text-slate-400'
+              disabled={!selectedSchool || loadingData}
             >
-              <option value=''>
-                {loadingData ? 'Loading subjects...' : 'Select a subject'}
+              <option value="">
+                {selectedSchool ? 'Select a subject' : 'Select a school first'}
               </option>
-              {subjects.map(subject => (
-                <option key={subject} value={subject}>
-                  {subject}
+              {availableSubjects.map(subject => (
+                <option key={subject.name} value={subject.name}>
+                  {subject.name}
                 </option>
               ))}
             </select>
+            {!selectedSchool && (
+              <p className='text-yellow-400 text-sm mt-1'>
+                Please select a school first to see available subjects.
+              </p>
+            )}
+            {selectedSchool && availableSubjects.length === 0 && !loadingData && (
+              <p className='text-yellow-400 text-sm mt-1'>
+                No subjects found for the selected school.
+              </p>
+            )}
           </div>
           
           <div className='space-y-2'>

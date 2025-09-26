@@ -51,6 +51,10 @@ export const updateMySchool = async (schoolData) => {
     return response.data;
   } catch (error) {
     console.error('Update my school API error:', error);
+    // Check if it's a permission error (403) or role error
+    if (error.response?.status === 403 || error.response?.status === 401) {
+      throw new Error('You do not have permission to edit this school. Please contact your administrator.');
+    }
     throw error;
   }
 };

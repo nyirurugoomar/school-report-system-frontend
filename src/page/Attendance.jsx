@@ -4,6 +4,8 @@ import * as classAPI from '../api/class'
 import * as studentAPI from '../api/student'
 import * as attendanceAPI from '../api/attendance'
 import * as schoolAPI from '../api/school'
+import { getUserRole } from '../utils/auth'
+
 
 function Attendance() {
   const navigate = useNavigate()
@@ -151,8 +153,8 @@ function Attendance() {
       const availableSchoolsResponse = await classAPI.getAvailableSchools()
       console.log('Available schools response:', availableSchoolsResponse)
       
-      // Extract the data array from the response
-      const schools = availableSchoolsResponse?.data || availableSchoolsResponse || []
+      // Extract the data array from the response - FIX THIS LINE
+      const schools = availableSchoolsResponse?.data?.data || availableSchoolsResponse?.data || []
       console.log('Available schools array:', schools)
       
       // Set available schools for the new interface
@@ -254,8 +256,8 @@ function Attendance() {
       const schoolsResponse = await classAPI.getAvailableSchools()
       console.log('Available schools response for class creation:', schoolsResponse)
       
-      // Extract the data array from the response
-      const schools = schoolsResponse?.data || schoolsResponse || []
+      // Extract the schools array from the response
+      const schools = schoolsResponse?.data || []
       console.log('Available schools array for class creation:', schools)
       setAvailableSchools(schools)
     } catch (error) {
@@ -1102,16 +1104,18 @@ function Attendance() {
                         )}
                       </div>
                       <div className="flex space-x-2">
-            <button
-              onClick={() => {
-                            setMySchool(school)
-                            setShowEditSchoolModal(true)
-              }}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
-            >
-                          Edit
-            </button>
-            <button
+                        {getUserRole() === 'admin' && (
+                          <button
+                            onClick={() => {
+                              setMySchool(school)
+                              setShowEditSchoolModal(true)
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        <button
                           onClick={() => setPrimarySchool(school)}
                           className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm transition-colors"
                         >
@@ -2216,33 +2220,32 @@ function Attendance() {
                 </div>
                 
                 <div>
-                  <label className='block text-white text-sm font-medium mb-2'>School *</label>
-                  <select
-                    value={newClass.schoolId}
-                    onChange={(e) => setNewClass({...newClass, schoolId: e.target.value})}
-                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent'
-                    disabled={loadingSchools}
-                  >
-                    <option value=''>
-                      {loadingSchools ? 'Loading schools...' : 'Select a school'}
-                    </option>
-                    {availableSchools.length > 0 ? (
-                      availableSchools.map(school => (
-                        <option key={school._id} value={school._id}>
-                          {school.name}
-                        </option>
-                      ))
-                    ) : (
-                      <option value='' disabled>No schools available - Create a school first</option>
-                    )}
-                  </select>
-                  {availableSchools.length === 0 && !loadingSchools && (
-                    <p className='text-yellow-400 text-sm mt-1'>
-                      You need to create a school first before creating classes.
-                    </p>
-                  )}
-                </div>
-                
+  <label className='block text-white text-sm font-medium mb-2'>School *</label>
+  <select
+    value={newClass.schoolId}
+    onChange={(e) => setNewClass({...newClass, schoolId: e.target.value})}
+    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent'
+    disabled={loadingSchools}
+  >
+    <option value=''>
+      {loadingSchools ? 'Loading schools...' : 'Select a school'}
+    </option>
+    {availableSchools.length > 0 ? (
+      availableSchools.map(school => (
+        <option key={school._id} value={school._id}>
+          {school.name}
+        </option>
+      ))
+    ) : (
+      <option value='' disabled>No schools available - Create a school first</option>
+    )}
+  </select>
+  {availableSchools.length === 0 && !loadingSchools && (
+    <p className='text-yellow-400 text-sm mt-1'>
+      You need to create a school first before creating classes.
+    </p>
+  )}
+</div>
                 <div>
                   <label className='block text-white text-sm font-medium mb-2'>Subject Name *</label>
                   <input
