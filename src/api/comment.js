@@ -49,6 +49,18 @@ export const getCommentById = async (id) => {
   }
 };
 
+export const getAllCommentsForAdmin = async () => {
+  try {
+    console.log('Making get all comments for admin request to:', `${api.defaults.baseURL}/comments/admin/all`);
+    const response = await api.get('/comments/admin/all');
+    console.log('Get all comments for admin response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get all comments for admin API error:', error);
+    throw error;
+  }
+};
+
 export const getAvailableClasses = async () => {
   try {
     console.log('Making get available classes request to:', `${api.defaults.baseURL}/comments/available-classes`);

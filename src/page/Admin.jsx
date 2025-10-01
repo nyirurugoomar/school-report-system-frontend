@@ -107,7 +107,7 @@ function Admin() {
       ] = await Promise.all([
         getAllClassesAdmin(),
         getAllStudentsAdmin(),
-        commentAPI.getComments(), // Keep using regular API for comments
+        commentAPI.getAllCommentsForAdmin(), // Use the new admin API
         getAllAttendanceAdmin(),
         getAdminDashboard(),
         getClassPerformanceAnalyticsAdmin(),
@@ -117,7 +117,7 @@ function Admin() {
 
       setClasses(classesData || [])
       setStudents(studentsData || [])
-      setComments(commentsData || [])
+      setComments(commentsData?.data || commentsData || []) // Handle the new response structure
       setAttendanceRecords(attendanceData || [])
       setUsers(usersData || [])
       setDashboardStats(dashboardData)
@@ -129,6 +129,7 @@ function Admin() {
         students: studentsData?.length || 0,
         attendance: attendanceData?.length || 0,
         users: usersData?.length || 0,
+        comments: commentsData?.data?.length || commentsData?.length || 0,
         stats: attendanceStatsData
       })
       
@@ -702,28 +703,50 @@ function Admin() {
 
             {/* Comments List */}
             <div className="bg-slate-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">All Comments ({filteredComments.length})</h3>
+              <h3 className="text-lg font-semibold text-white mb-4">
+                All Comments ({filteredComments.length}) 
+                <span className="text-sm text-slate-400 ml-2">- Admin View</span>
+              </h3>
               <div className="space-y-4">
                 {filteredComments.map(comment => (
                   <div key={comment._id} className="bg-slate-600 rounded-lg p-4 cursor-pointer hover:bg-slate-500 transition-colors" onClick={() => openCommentModal(comment)}>
                     <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <h4 className="text-white font-medium">{comment.className} - {comment.subjectName}</h4>
-                        <p className="text-slate-300 text-sm mt-1">{comment.successStory || comment.challenge || 'No content'}</p>
-                        <div className="flex items-center mt-2 space-x-4">
-                          <span className="text-blue-400 text-xs">Click to view full details</span>
-                          {comment.teacherId && (
-                            <span className="text-gray-400 text-xs">Teacher: {getTeacherName(comment.teacherId)}</span>
-                          )}
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <h4 className="text-white font-medium">{comment.className} - {comment.subjectName}</h4>
+                            {comment.schoolId && (
+                              <span className="bg-blue-600 text-white px-2 py-1 rounded text-xs">
+                                School: {comment.schoolId.name || comment.schoolId}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-slate-300 text-sm mt-1 line-clamp-2">{comment.successStory || comment.challenge || 'No content'}</p>
+                          <div className="flex items-center mt-2 space-x-4">
+                            <span className="text-blue-400 text-xs">Click to view full details</span>
+                            {comment.teacherId && (
+                              <span className="text-gray-400 text-xs">
+                                Teacher: {comment.teacherId.username || comment.teacherId.email || getTeacherName(comment.teacherId)}
+                              </span>
+                            )}
+                            <span className="text-green-400 text-xs">{comment.numberOfStudents} students</span>
+                          </div>
                         </div>
-                      </div>
                       <div className="text-right">
                         <p className="text-slate-400 text-sm">{new Date(comment.createdAt || comment.date).toLocaleDateString()}</p>
-                        <p className="text-slate-400 text-xs">{comment.numberOfStudents} students</p>
+                        <p className="text-slate-400 text-xs">
+                          {new Date(comment.createdAt || comment.date).toLocaleTimeString()}
+                        </p>
                       </div>
                     </div>
                   </div>
                 ))}
+                {filteredComments.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="text-slate-400 text-6xl mb-4">💬</div>
+                    <h4 className="text-xl font-medium text-white mb-2">No Comments Found</h4>
+                    <p className="text-slate-400">No comments match your current filters.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1590,6 +1613,29 @@ function Admin() {
                   <p className="text-white font-medium">{new Date(selectedComment.createdAt || selectedComment.date).toLocaleDateString()}</p>
                 </div>
               </div>
+
+              {/* School Information */}
+              {selectedComment.schoolId && (
+                <div className="bg-slate-700 rounded-lg p-4">
+                  <h4 className="text-white font-medium mb-2">🏫 School Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-gray-400 text-sm">School Name:</p>
+                      <p className="text-white font-medium">{selectedComment.schoolId.name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-sm">School ID:</p>
+                      <p className="text-white font-medium">{selectedComment.schoolId._id || selectedComment.schoolId}</p>
+                    </div>
+                    {selectedComment.schoolId.createdBy && (
+                      <div>
+                        <p className="text-gray-400 text-sm">Created By:</p>
+                        <p className="text-white font-medium">{selectedComment.schoolId.createdBy}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               
               {selectedComment.successStory && (
                 <div>
@@ -1608,7 +1654,13 @@ function Admin() {
               <div className="flex justify-between items-center pt-4 border-t border-slate-600">
                 <div>
                   <p className="text-gray-400 text-sm mb-2">Created by:</p>
-                  <p className="text-white font-medium">{getTeacherName(selectedComment.teacherId)}</p>
+                  <div className="bg-slate-700 rounded-lg p-3">
+                    <p className="text-white font-medium">
+                      {selectedComment.teacherId?.username || selectedComment.teacherId?.email || getTeacherName(selectedComment.teacherId)}
+                    </p>
+                    <p className="text-gray-400 text-sm">Email: {selectedComment.teacherId?.email || 'N/A'}</p>
+                    <p className="text-gray-400 text-sm">Role: {selectedComment.teacherId?.role || 'N/A'}</p>
+                  </div>
                   <p className="text-gray-400 text-sm mt-2">
                     Created: {new Date(selectedComment.createdAt || selectedComment.date).toLocaleString()}
                   </p>
@@ -1616,7 +1668,7 @@ function Admin() {
                 <div className="text-right">
                   <div>
                     <p className="text-gray-400">Teacher ID:</p>
-                    <p className="text-white font-mono">{getTeacherId(selectedComment.teacherId)}</p>
+                    <p className="text-white font-mono text-sm">{getTeacherId(selectedComment.teacherId)}</p>
                   </div>
                 </div>
               </div>
