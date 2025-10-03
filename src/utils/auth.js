@@ -29,7 +29,8 @@ export const getUserRole = () => {
  */
 export const isAdmin = () => {
   const role = getUserRole()
-  return role === 'admin' || role === 'Admin'
+  console.log('isAdmin check - role:', role, 'type:', typeof role)
+  return role && (role.toLowerCase() === 'admin')
 }
 
 /**

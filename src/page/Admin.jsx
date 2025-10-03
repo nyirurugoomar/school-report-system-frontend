@@ -1614,6 +1614,7 @@ function Admin() {
                 </div>
               </div>
 
+
               {/* School Information */}
               {selectedComment.schoolId && (
                 <div className="bg-slate-700 rounded-lg p-4">
@@ -1634,6 +1635,238 @@ function Admin() {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* GPS Location Information */}
+              {selectedComment.gpsLocation && (
+                <div className="bg-green-800 rounded-lg p-4">
+                  <h4 className="text-green-400 font-medium mb-3 flex items-center">
+                    <span className="text-xl mr-2">🎯</span>
+                    GPS Location (High Accuracy)
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-gray-400 text-sm">📍 Source:</p>
+                      <p className="text-white font-medium capitalize">{selectedComment.gpsLocation.source || 'GPS'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-sm">📏 Accuracy:</p>
+                      <p className="text-white font-medium">
+                        {selectedComment.gpsLocation.coordinates?.accuracy ? 
+                          `±${Math.round(selectedComment.gpsLocation.coordinates.accuracy)}m` : 
+                          'Unknown'
+                        }
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-sm">🎯 Coordinates:</p>
+                      <p className="text-white font-medium font-mono text-xs">
+                        {selectedComment.gpsLocation.coordinates?.latitude?.toFixed(6)}, {selectedComment.gpsLocation.coordinates?.longitude?.toFixed(6)}
+                      </p>
+                    </div>
+                    {selectedComment.gpsLocation.coordinates?.altitude && (
+                      <div>
+                        <p className="text-gray-400 text-sm">⛰️ Altitude:</p>
+                        <p className="text-white font-medium">{Math.round(selectedComment.gpsLocation.coordinates.altitude)}m</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Detailed Address Information */}
+                  <div className="border-t border-green-600 pt-4 mb-4">
+                    <h5 className="text-green-300 font-medium mb-3">🏠 Detailed Address Information</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-gray-400 text-sm">🛣️ Street:</p>
+                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.street || 'Unknown Street'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-sm">🏘️ Village:</p>
+                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.village || 'Unknown Village'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-sm">🏛️ District:</p>
+                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.district || 'Unknown District'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-sm">🏙️ City:</p>
+                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.city || 'Unknown City'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-sm">🗺️ State:</p>
+                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.state || 'Unknown State'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-sm">🌍 Country:</p>
+                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.country || 'Unknown Country'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-sm">📮 Postal Code:</p>
+                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.postalCode || 'Unknown'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 text-sm">🕐 Captured:</p>
+                        <p className="text-white font-medium text-xs">
+                          {selectedComment.gpsLocation.timestamp ? 
+                            new Date(selectedComment.gpsLocation.timestamp).toLocaleString() : 
+                            'Unknown'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Full Address */}
+                    {selectedComment.gpsLocation.address?.fullAddress && (
+                      <div className="mt-4 p-3 bg-green-900 rounded-lg">
+                        <p className="text-gray-400 text-sm mb-1">📍 Complete Address:</p>
+                        <p className="text-green-300 font-medium">{selectedComment.gpsLocation.address.fullAddress}</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Google Maps Button */}
+                  <div className="border-t border-green-600 pt-4">
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => {
+                          const url = `https://www.google.com/maps?q=${selectedComment.gpsLocation.coordinates.latitude},${selectedComment.gpsLocation.coordinates.longitude}`
+                          window.open(url, '_blank')
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg text-sm font-medium flex items-center space-x-2"
+                      >
+                        <span>🗺️</span>
+                        <span>View GPS Location on Google Maps</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+
+              {/* IP-Based Tracking Information */}
+              {selectedComment.tracking && (
+                <div className="bg-slate-700 rounded-lg p-4">
+                  <h4 className="text-white font-medium mb-2 flex items-center">
+                    <span className="text-xl mr-2">🌐</span>
+                    IP-Based Tracking {selectedComment.gpsLocation ? '(Fallback)' : '(Primary)'}
+                  </h4>
+                  
+                  {/* IP and Device Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-gray-400 text-sm">IP Address:</p>
+                      <p className="text-white font-medium">{selectedComment.tracking.ip}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-sm">Timezone:</p>
+                      <p className="text-white font-medium">{selectedComment.tracking.device?.timezone || 'Unknown'}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-sm">Captured At:</p>
+                      <p className="text-white font-medium">
+                        {selectedComment.tracking.device?.timestamp ? 
+                          new Date(selectedComment.tracking.device.timestamp).toLocaleString() : 
+                          'Unknown'
+                        }
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-400 text-sm">Device:</p>
+                      <p className="text-white font-medium text-xs break-all">
+                        {selectedComment.tracking.device?.userAgent ? 
+                          selectedComment.tracking.device.userAgent.substring(0, 50) + '...' : 
+                          'Unknown'
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* IP-Based Location Information */}
+                  {selectedComment.tracking.location ? (
+                    <div className="border-t border-slate-600 pt-4">
+                      <h5 className="text-white font-medium mb-3">🌍 IP-Based Location</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <p className="text-gray-400 text-sm">🎯 Coordinates:</p>
+                          <p className="text-white font-medium font-mono text-xs">
+                            {selectedComment.tracking.location.lat.toFixed(6)}, {selectedComment.tracking.location.lng.toFixed(6)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 text-sm">📏 Accuracy:</p>
+                          <p className="text-white font-medium">±{Math.round(selectedComment.tracking.location.accuracy)}m</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 text-sm">🏙️ City:</p>
+                          <p className="text-white font-medium">{selectedComment.tracking.location.city || 'Unknown'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 text-sm">🌍 Country:</p>
+                          <p className="text-white font-medium">{selectedComment.tracking.location.country || 'Unknown'}</p>
+                        </div>
+                        {selectedComment.tracking.location.district && (
+                          <div>
+                            <p className="text-gray-400 text-sm">🏛️ District:</p>
+                            <p className="text-white font-medium">{selectedComment.tracking.location.district}</p>
+                          </div>
+                        )}
+                        {selectedComment.tracking.location.village && (
+                          <div>
+                            <p className="text-gray-400 text-sm">🏘️ Village:</p>
+                            <p className="text-white font-medium">{selectedComment.tracking.location.village}</p>
+                          </div>
+                        )}
+                        {selectedComment.tracking.location.postalCode && (
+                          <div>
+                            <p className="text-gray-400 text-sm">📮 Postal Code:</p>
+                            <p className="text-white font-medium">{selectedComment.tracking.location.postalCode}</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Full Address */}
+                      {selectedComment.tracking.location.fullAddress && (
+                        <div className="mb-4 p-3 bg-slate-800 rounded-lg">
+                          <p className="text-gray-400 text-sm mb-1">📍 Complete Address:</p>
+                          <p className="text-blue-300 font-medium">{selectedComment.tracking.location.fullAddress}</p>
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => {
+                            const url = `https://www.google.com/maps?q=${selectedComment.tracking.location.lat},${selectedComment.tracking.location.lng}`
+                            window.open(url, '_blank')
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-sm font-medium flex items-center space-x-2"
+                        >
+                          <span>🗺️</span>
+                          <span>View IP Location on Google Maps</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border-t border-slate-600 pt-4">
+                      <div className="bg-yellow-900 rounded-lg p-3">
+                        <p className="text-yellow-400 text-sm">
+                          ⚠️ IP-based location could not be determined
+                        </p>
+                        <p className="text-yellow-300 text-xs mt-1">
+                          This might be due to private/local IP address or location service unavailable
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* No Tracking Data */}
+              {!selectedComment.tracking && !selectedComment.gpsLocation && (
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <h4 className="text-gray-400 font-medium mb-2">📍 Tracking Information</h4>
+                  <p className="text-gray-500 text-sm">No location tracking data available for this comment.</p>
                 </div>
               )}
               

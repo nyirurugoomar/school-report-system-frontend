@@ -15,33 +15,11 @@ export const createMarks = async (marksData) => {
 
 export const createBulkMarks = async (marksRecords) => {
   try {
-    // Validate that all required fields are present and not empty
-    const validatedMarks = marksRecords.map((mark, index) => {
-      // Check for required fields
-      const requiredFields = ['studentId', 'subjectId', 'teacherId', 'classId', 'schoolId'];
-      const missingFields = requiredFields.filter(field => !mark[field] || mark[field].trim() === '');
-      
-      if (missingFields.length > 0) {
-        throw new Error(`Mark ${index + 1} is missing required fields: ${missingFields.join(', ')}`);
-      }
-      
-      // Validate ObjectId format (basic check - should be 24 character hex string)
-      const objectIdFields = ['studentId', 'subjectId', 'teacherId', 'classId', 'schoolId'];
-      const invalidObjectIds = objectIdFields.filter(field => {
-        const value = mark[field];
-        return !/^[0-9a-fA-F]{24}$/.test(value);
-      });
-      
-      if (invalidObjectIds.length > 0) {
-        throw new Error(`Mark ${index + 1} has invalid ObjectId format for fields: ${invalidObjectIds.join(', ')}`);
-      }
-      
-      return mark;
-    });
-    
     console.log('Making bulk marks request to:', `${api.defaults.baseURL}/marks/bulk`);
-    console.log('Validated marks data being sent:', validatedMarks);
-    const response = await api.post('/marks/bulk', { marks: validatedMarks });
+    console.log('Bulk marks data being sent:', marksRecords);
+    
+    // Send array directly or as records property based on backend expectation
+    const response = await api.post('/marks/bulk', marksRecords);
     console.log('Bulk marks response:', response);
     return response.data;
   } catch (error) {
@@ -65,12 +43,67 @@ export const getMarks = async (filters = {}) => {
     
     console.log('Clean filters being sent:', cleanFilters);
     
-    // Call the correct endpoint: /marks (not /marks/all)
     const response = await api.get('/marks', { params: cleanFilters });
     console.log('Get marks response:', response);
     return response.data;
   } catch (error) {
     console.error('Get marks API error:', error);
+    throw error;
+  }
+};
+
+// Get marks with enhanced filtering (matches backend findAllWithDetails)
+export const getMarksWithFilters = async (filters = {}) => {
+  try {
+    console.log('Making get marks with filters request to:', `${api.defaults.baseURL}/marks`);
+    console.log('Enhanced filters being sent:', filters);
+    
+    // Clean and format filters for backend
+    const cleanFilters = Object.entries(filters).reduce((acc, [key, value]) => {
+      if (value !== '' && value !== null && value !== undefined && value.toString().trim() !== '') {
+        // Format date filters properly
+        if (key === 'dateFrom' || key === 'dateTo') {
+          acc[key] = new Date(value).toISOString();
+        } else {
+          acc[key] = value.toString().trim();
+        }
+      }
+      return acc;
+    }, {});
+    
+    console.log('Clean enhanced filters being sent:', cleanFilters);
+    
+    const response = await api.get('/marks', { params: cleanFilters });
+    console.log('Get marks with filters response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get marks with filters API error:', error);
+    throw error;
+  }
+};
+
+// Get teacher's own marks
+export const getMyMarks = async () => {
+  try {
+    console.log('Making get my marks request to:', `${api.defaults.baseURL}/marks/teacher/my-marks`);
+    const response = await api.get('/marks/teacher/my-marks');
+    console.log('Get my marks response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get my marks API error:', error);
+    throw error;
+  }
+};
+
+// Get marks by class and subject
+export const getMarksByClassAndSubject = async (classId, subjectId) => {
+  try {
+    console.log('Making get marks by class and subject request to:', `${api.defaults.baseURL}/marks/class/${classId}/subject/${subjectId}`);
+    const response = await api.get(`/marks/class/${classId}/subject/${subjectId}`);
+    console.log('Get marks by class and subject response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get marks by class and subject API error:', error);
     throw error;
   }
 };
@@ -83,6 +116,19 @@ export const getMarkById = async (marksId) => {
     return response.data;
   } catch (error) {
     console.error('Get mark by ID API error:', error);
+    throw error;
+  }
+};
+
+// Get mark details with populated data
+export const getMarkDetails = async (marksId) => {
+  try {
+    console.log('Making get mark details request to:', `${api.defaults.baseURL}/marks/${marksId}/details`);
+    const response = await api.get(`/marks/${marksId}/details`);
+    console.log('Get mark details response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get mark details API error:', error);
     throw error;
   }
 };
@@ -168,15 +214,79 @@ export const getMarksSummary = async (classId, examType = null, academicYear = n
   }
 };
 
-// Add this test function to debug
-export const testMarksEndpoint = async () => {
+// Enhanced marks analytics and reporting
+export const getMarksAnalytics = async (filters = {}) => {
   try {
-    console.log('Testing marks endpoint...');
-    const response = await api.get('/marks/test');
-    console.log('Test endpoint response:', response);
+    console.log('Making get marks analytics request to:', `${api.defaults.baseURL}/marks`);
+    console.log('Analytics filters being sent:', filters);
+    
+    const response = await api.get('/marks', { params: filters });
+    console.log('Get marks analytics response:', response);
     return response.data;
   } catch (error) {
-    console.error('Test endpoint error:', error);
+    console.error('Get marks analytics API error:', error);
+    throw error;
+  }
+};
+
+// Get marks by date range
+export const getMarksByDateRange = async (dateFrom, dateTo, additionalFilters = {}) => {
+  try {
+    console.log('Making get marks by date range request to:', `${api.defaults.baseURL}/marks`);
+    
+    const filters = {
+      dateFrom,
+      dateTo,
+      ...additionalFilters
+    };
+    
+    console.log('Date range filters being sent:', filters);
+    const response = await api.get('/marks', { params: filters });
+    console.log('Get marks by date range response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get marks by date range API error:', error);
+    throw error;
+  }
+};
+
+// Get marks by academic year and term
+export const getMarksByAcademicPeriod = async (academicYear, academicTerm, additionalFilters = {}) => {
+  try {
+    console.log('Making get marks by academic period request to:', `${api.defaults.baseURL}/marks`);
+    
+    const filters = {
+      academicYear,
+      academicTerm,
+      ...additionalFilters
+    };
+    
+    console.log('Academic period filters being sent:', filters);
+    const response = await api.get('/marks', { params: filters });
+    console.log('Get marks by academic period response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get marks by academic period API error:', error);
+    throw error;
+  }
+};
+
+// Get marks by exam type
+export const getMarksByExamType = async (examType, additionalFilters = {}) => {
+  try {
+    console.log('Making get marks by exam type request to:', `${api.defaults.baseURL}/marks`);
+    
+    const filters = {
+      examType,
+      ...additionalFilters
+    };
+    
+    console.log('Exam type filters being sent:', filters);
+    const response = await api.get('/marks', { params: filters });
+    console.log('Get marks by exam type response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get marks by exam type API error:', error);
     throw error;
   }
 };

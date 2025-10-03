@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { clearUser, isAdmin } from '../utils/auth'
+import { clearUser, isAdmin, getUserRole } from '../utils/auth'
 import logo from '../assets/Partnershiplogo.png'
 
 function Navbar() {
@@ -12,6 +12,15 @@ function Navbar() {
   const isActive = (path) => {
     return location.pathname === path || location.pathname.startsWith(path + '/')
   }
+
+  // Check if user is admin (hide Comments, Attendance, Marks for all admins)
+  const userIsAdmin = isAdmin()
+  
+  // Debug: Log user role information
+  const userRole = getUserRole()
+  console.log('Navbar - Current user role:', userRole)
+  console.log('Navbar - Is admin:', userIsAdmin)
+  console.log('Navbar - Current path:', location.pathname)
 
   // Logout functionality
   const handleLogout = () => {
@@ -49,36 +58,41 @@ function Navbar() {
 
         {/* Desktop Navigation */}
         <div className='hidden md:flex space-x-4'>
-          <Link 
-            to="/comment" 
-            className={`px-4 py-2 rounded-md transition-colors ${
-              isActive('/comment') 
-                ? 'bg-slate-700 text-white' 
-                : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            Comments
-          </Link>
-          <Link 
-            to="/attendance" 
-            className={`px-4 py-2 rounded-md transition-colors ${
-              isActive('/attendance') 
-                ? 'bg-slate-700 text-white' 
-                : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            Attendance
-          </Link>
-          <Link 
-            to="/marks" 
-            className={`px-4 py-2 rounded-md transition-colors ${
-              isActive('/marks') 
-                ? 'bg-slate-700 text-white' 
-                : 'text-gray-300 hover:text-white'
-            }`}
-          >
-            Marks
-          </Link>
+          {/* Only show Comments, Attendance, Marks if NOT admin */}
+          {!userIsAdmin && (
+            <>
+              <Link 
+                to="/comment" 
+                className={`px-4 py-2 rounded-md transition-colors ${
+                  isActive('/comment') 
+                    ? 'bg-slate-700 text-white' 
+                    : 'text-gray-300 hover:text-white'
+                }`}
+              >
+                Comments
+              </Link>
+              <Link 
+                to="/attendance" 
+                className={`px-4 py-2 rounded-md transition-colors ${
+                  isActive('/attendance') 
+                    ? 'bg-slate-700 text-white' 
+                    : 'text-gray-300 hover:text-white'
+                }`}
+              >
+                Attendance
+              </Link>
+              <Link 
+                to="/marks" 
+                className={`px-4 py-2 rounded-md transition-colors ${
+                  isActive('/marks') 
+                    ? 'bg-slate-700 text-white' 
+                    : 'text-gray-300 hover:text-white'
+                }`}
+              >
+                Marks
+              </Link>
+            </>
+          )}
           {isAdmin() && (
             <Link 
               to="/admin" 
@@ -136,43 +150,47 @@ function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Navigation Menu */}
       {isMobileMenuOpen && (
         <div className='md:hidden mt-4 pb-4 border-t border-slate-700'>
           <div className='flex flex-col space-y-2 pt-4'>
-            <Link 
-              to="/comment" 
-              onClick={handleLinkClick}
-              className={`px-4 py-3 rounded-md transition-colors ${
-                isActive('/comment') 
-                  ? 'bg-slate-700 text-white' 
-                  : 'text-gray-300 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              📝 Comments
-            </Link>
-            <Link 
-              to="/attendance" 
-              onClick={handleLinkClick}
-              className={`px-4 py-3 rounded-md transition-colors ${
-                isActive('/attendance') 
-                  ? 'bg-slate-700 text-white' 
-                  : 'text-gray-300 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              📊 Attendance
-            </Link>
-            <Link 
-              to="/marks" 
-              onClick={handleLinkClick}
-              className={`px-4 py-3 rounded-md transition-colors ${
-                isActive('/marks') 
-                  ? 'bg-slate-700 text-white' 
-                  : 'text-gray-300 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              📈 Marks
-            </Link>
+            {/* Only show Comments, Attendance, Marks if NOT admin */}
+            {!userIsAdmin && (
+              <>
+                <Link 
+                  to="/comment" 
+                  onClick={handleLinkClick}
+                  className={`px-4 py-3 rounded-md transition-colors ${
+                    isActive('/comment') 
+                      ? 'bg-slate-700 text-white' 
+                      : 'text-gray-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  📝 Comments
+                </Link>
+                <Link 
+                  to="/attendance" 
+                  onClick={handleLinkClick}
+                  className={`px-4 py-3 rounded-md transition-colors ${
+                    isActive('/attendance') 
+                      ? 'bg-slate-700 text-white' 
+                      : 'text-gray-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  📊 Attendance
+                </Link>
+                <Link 
+                  to="/marks" 
+                  onClick={handleLinkClick}
+                  className={`px-4 py-3 rounded-md transition-colors ${
+                    isActive('/marks') 
+                      ? 'bg-slate-700 text-white' 
+                      : 'text-gray-300 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  📈 Marks
+                </Link>
+              </>
+            )}
             {isAdmin() && (
               <Link 
                 to="/admin" 

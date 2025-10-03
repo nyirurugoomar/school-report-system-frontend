@@ -52,8 +52,15 @@ function SignIn() {
         console.log('User role stored:', response.role)
       }
       
-      // Navigate to comment page
-      navigate('/comment')
+      // Navigate based on user role
+      const userRole = response.user?.role || response.role
+      if (userRole && userRole.toLowerCase() === 'admin') {
+        console.log('Admin user detected, redirecting to admin dashboard')
+        navigate('/admin')
+      } else {
+        console.log('Regular user detected, redirecting to comment page')
+        navigate('/comment')
+      }
     } catch (error) {
       console.error('Signin error:', error)
       console.error('Error response:', error.response)

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as commentAPI from '../api/comment'
 import * as classAPI from '../api/class'
+import LocationService from '../services/LocationService'
 
 function Comment() {
   const navigate = useNavigate()
@@ -24,11 +25,60 @@ function Comment() {
   const [selectedSchool, setSelectedSchool] = useState('')
   const [selectedClass, setSelectedClass] = useState('')
   const [selectedSubject, setSelectedSubject] = useState('')
+  
+  // GPS Location tracking states
+  const [gpsLocation, setGpsLocation] = useState(null)
+  const [locationLoading, setLocationLoading] = useState(false)
+  const [locationError, setLocationError] = useState(null)
+  const [locationPermission, setLocationPermission] = useState('prompt') // 'prompt', 'granted', 'denied'
+  
 
   // Load initial data on component mount
   useEffect(() => {
     loadInitialData()
   }, [])
+
+  // GPS Location Functions
+  const getGpsLocation = async () => {
+    setLocationLoading(true)
+    setLocationError(null)
+    
+    try {
+      const position = await LocationService.getCurrentLocation()
+      const address = await LocationService.reverseGeocode(
+        position.latitude, 
+        position.longitude
+      )
+      
+      const locationData = {
+        ...position,
+        ...address,
+        type: 'gps' // Mark as GPS location
+      }
+      
+      setGpsLocation(locationData)
+      setLocationPermission('granted')
+      
+      console.log('📍 GPS Location captured:', {
+        lat: position.latitude,
+        lng: position.longitude,
+        accuracy: position.accuracy,
+        address: address.address
+      })
+    } catch (error) {
+      setLocationError(error.message)
+      setLocationPermission('denied')
+      console.error('GPS Location error:', error)
+    } finally {
+      setLocationLoading(false)
+    }
+  }
+
+  const clearLocation = () => {
+    setGpsLocation(null)
+    setLocationError(null)
+    setLocationPermission('prompt')
+  }
 
   const loadInitialData = async () => {
     try {
@@ -119,6 +169,13 @@ function Comment() {
       return
     }
 
+    // Check if GPS location is required and captured
+    if (!gpsLocation) {
+      setError('GPS location is required. Please capture your location before submitting.')
+      setLoading(false)
+      return
+    }
+
     try {
       const commentData = {
         schoolId: formData.schoolId,
@@ -127,7 +184,8 @@ function Comment() {
         numberOfStudents: parseInt(formData.numberOfStudents),
         successStory: formData.successStory.trim(),
         challenge: formData.challenge.trim(),
-        date: new Date(formData.date)
+        date: new Date(formData.date),
+        _gpsLocation: gpsLocation // GPS location data
       }
 
       console.log('Sending comment data:', commentData)
@@ -135,8 +193,11 @@ function Comment() {
       const response = await commentAPI.createComment(commentData)
       console.log('Comment created successfully:', response)
       
-      setSuccess('Comment submitted successfully!')
+      // Show success message immediately and stop loading
+      setSuccess('✅ Comment submitted successfully! Redirecting...')
+      setLoading(false) // Stop loading immediately so success message shows
       
+      // Reset form data
       setFormData({
         schoolId: '',
         className: '',
@@ -146,10 +207,17 @@ function Comment() {
         challenge: '',
         date: new Date().toISOString().split('T')[0]
       })
+      setSelectedSchool('')
+      setSelectedClass('')
+      setSelectedSubject('')
+      setGpsLocation(null)
+      setLocationError(null)
+      setLocationPermission('prompt')
 
+      // Navigate after shorter delay
       setTimeout(() => {
         navigate('/success')
-      }, 2000)
+      }, 1500)
 
     } catch (error) {
       console.error('Comment submission error:', error)
@@ -165,8 +233,7 @@ function Comment() {
       }
       
       setError(errorMessage)
-    } finally {
-      setLoading(false)
+      setLoading(false) // Stop loading on error
     }
   }
 
@@ -195,6 +262,98 @@ function Comment() {
             </div>
           </div>
         )}
+
+        {/* GPS Location Section - REQUIRED */}
+        <div className='mb-6'>
+          <div className='bg-red-900 border border-red-700 rounded-lg p-4'>
+            <h3 className="text-red-400 font-medium mb-4 flex items-center">
+              <span className="text-2xl mr-2">📍</span>
+              GPS Location Tracking <span className="text-red-500 text-sm ml-2">(REQUIRED)</span>
+            </h3>
+            
+            {!gpsLocation ? (
+              <div>
+                <button 
+                  type="button" 
+                  onClick={getGpsLocation}
+                  disabled={locationLoading}
+                  className="bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg text-sm font-medium border-2 border-red-500"
+                >
+                  {locationLoading ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Getting GPS Location...
+                    </div>
+                  ) : (
+                    '📍 Get My GPS Location (Required)'
+                  )}
+                </button>
+                
+                {locationError && (
+                  <div className="mt-3 p-3 bg-red-800 rounded-lg border border-red-600">
+                    <p className="text-red-300 text-sm">⚠️ GPS Error: {locationError}</p>
+                    <p className="text-red-200 text-xs mt-1">
+                      GPS location is required to submit a comment. Please try again or check your browser permissions.
+                    </p>
+                  </div>
+                )}
+                
+                <div className="mt-3 p-3 bg-red-800 rounded-lg border border-red-600">
+                  <p className="text-red-300 text-sm">
+                    <strong>⚠️ GPS Location Required:</strong>
+                  </p>
+                  <p className="text-red-200 text-xs mt-1">
+                    You must capture your GPS location before submitting a comment. This is required for location verification and accurate reporting.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-green-900 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-green-400 font-medium">✅ GPS Location captured successfully!</p>
+                  <button 
+                    type="button" 
+                    onClick={clearLocation}
+                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs"
+                  >
+                    🔄 Update Location
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-gray-400">📍 Address:</p>
+                    <p className="text-white font-medium">{gpsLocation.address}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">🏙️ City:</p>
+                    <p className="text-white font-medium">{gpsLocation.city}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">🌍 Country:</p>
+                    <p className="text-white font-medium">{gpsLocation.country}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">🎯 GPS Coordinates:</p>
+                    <p className="text-white font-medium font-mono text-xs">
+                      {gpsLocation.latitude.toFixed(6)}, {gpsLocation.longitude.toFixed(6)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">📏 Accuracy:</p>
+                    <p className="text-white font-medium">±{Math.round(gpsLocation.accuracy)} meters</p>
+                  </div>
+                  {gpsLocation.altitude && (
+                    <div>
+                      <p className="text-gray-400">⛰️ Altitude:</p>
+                      <p className="text-white font-medium">{Math.round(gpsLocation.altitude)} meters</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
         
         <form onSubmit={handleSubmit} className='w-full space-y-6'>
           <div className='space-y-2'>
@@ -346,10 +505,14 @@ function Comment() {
           <div className='pt-4'>
             <button 
               type="submit"
-              disabled={loading}
-              className='w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-500 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200'
+              disabled={loading || !gpsLocation}
+              className={`w-full font-semibold py-3 px-4 rounded-lg transition-colors duration-200 ${
+                loading || !gpsLocation 
+                  ? 'bg-gray-500 text-gray-300 cursor-not-allowed' 
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              }`}
             >
-              {loading ? 'Submitting...' : 'Submit Form'}
+              {loading ? 'Submitting...' : !gpsLocation ? 'GPS Location Required' : 'Submit Comment'}
             </button>
           </div>
         </form>
