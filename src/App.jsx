@@ -10,7 +10,11 @@ import Marks from './page/Marks'
 import CreateMarks from './page/CreateMarks'
 import EditMarks from './page/EditMarks'
 import ProtectedRoute from './components/ProtectedRoute'
+import { useTracking } from './hooks/useTracking'
+
 function App() {
+  // Initialize tracking
+  useTracking()
   return (
     <>
       <Routes>

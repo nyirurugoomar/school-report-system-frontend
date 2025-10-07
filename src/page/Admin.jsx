@@ -28,9 +28,11 @@ import {
   getClassPerformanceReportAdmin,
   getStudentPerformanceReportAdmin
 } from '../api/auth'
+import { useTracking } from '../hooks/useTracking'
 
 function Admin() {
   const navigate = useNavigate()
+  const { trackAdminDashboardAccess, trackDataAccess, trackReportGeneration } = useTracking()
   const [activeTab, setActiveTab] = useState('overview')
   const [classes, setClasses] = useState([])
   const [students, setStudents] = useState([])
@@ -92,6 +94,11 @@ function Admin() {
   const loadDashboardData = async () => {
     setLoading(true)
     setError('')
+    
+    // Track admin dashboard access
+    await trackAdminDashboardAccess({
+      timestamp: new Date().toISOString()
+    })
     
     try {
       // Load all admin data in parallel using admin-specific APIs
@@ -1678,34 +1685,34 @@ function Admin() {
                   <div className="border-t border-green-600 pt-4 mb-4">
                     <h5 className="text-green-300 font-medium mb-3">🏠 Detailed Address Information</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
+                      {/* <div>
                         <p className="text-gray-400 text-sm">🛣️ Street:</p>
                         <p className="text-white font-medium">{selectedComment.gpsLocation.address?.street || 'Unknown Street'}</p>
-                      </div>
-                      <div>
+                      </div> */}
+                      {/* <div>
                         <p className="text-gray-400 text-sm">🏘️ Village:</p>
                         <p className="text-white font-medium">{selectedComment.gpsLocation.address?.village || 'Unknown Village'}</p>
-                      </div>
+                      </div> */}
                       <div>
                         <p className="text-gray-400 text-sm">🏛️ District:</p>
-                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.district || 'Unknown District'}</p>
+                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.region || 'Unknown District'}</p>
                       </div>
                       <div>
                         <p className="text-gray-400 text-sm">🏙️ City:</p>
                         <p className="text-white font-medium">{selectedComment.gpsLocation.address?.city || 'Unknown City'}</p>
                       </div>
                       <div>
-                        <p className="text-gray-400 text-sm">🗺️ State:</p>
+                        <p className="text-gray-400 text-sm">🗺️ Province:</p>
                         <p className="text-white font-medium">{selectedComment.gpsLocation.address?.state || 'Unknown State'}</p>
                       </div>
                       <div>
                         <p className="text-gray-400 text-sm">🌍 Country:</p>
                         <p className="text-white font-medium">{selectedComment.gpsLocation.address?.country || 'Unknown Country'}</p>
                       </div>
-                      <div>
+                      {/* <div>
                         <p className="text-gray-400 text-sm">📮 Postal Code:</p>
                         <p className="text-white font-medium">{selectedComment.gpsLocation.address?.postalCode || 'Unknown'}</p>
-                      </div>
+                      </div> */}
                       <div>
                         <p className="text-gray-400 text-sm">🕐 Captured:</p>
                         <p className="text-white font-medium text-xs">

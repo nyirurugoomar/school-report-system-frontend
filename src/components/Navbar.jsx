@@ -2,10 +2,12 @@ import React, { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { clearUser, isAdmin, getUserRole } from '../utils/auth'
 import logo from '../assets/Partnershiplogo.png'
+import { useTracking } from '../hooks/useTracking'
 
 function Navbar() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { trackLogout } = useTracking()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   
   // Helper function to check if current route is active
@@ -23,8 +25,14 @@ function Navbar() {
   console.log('Navbar - Current path:', location.pathname)
 
   // Logout functionality
-  const handleLogout = () => {
+  const handleLogout = async () => {
     try {
+      // Track logout event
+      const userRole = getUserRole()
+      await trackLogout(userRole, {
+        timestamp: new Date().toISOString()
+      })
+      
       // Clear all authentication data using utility function
       clearUser()
       

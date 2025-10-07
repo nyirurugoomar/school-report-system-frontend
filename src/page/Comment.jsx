@@ -321,18 +321,21 @@ function Comment() {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-gray-400">📍 Address:</p>
-                    <p className="text-white font-medium">{gpsLocation.address}</p>
+                
+                <div>
+                    <p className="text-gray-400">🌍 Country:</p>
+                    <p className="text-white font-medium">{gpsLocation.country}</p>
                   </div>
                   <div>
                     <p className="text-gray-400">🏙️ City:</p>
                     <p className="text-white font-medium">{gpsLocation.city}</p>
                   </div>
+
                   <div>
-                    <p className="text-gray-400">🌍 Country:</p>
-                    <p className="text-white font-medium">{gpsLocation.country}</p>
+                    <p className="text-gray-400">🏛️ Province:</p>
+                    <p className="text-white font-medium">{gpsLocation.state}</p>
                   </div>
+                  
                   <div>
                     <p className="text-gray-400">🎯 GPS Coordinates:</p>
                     <p className="text-white font-medium font-mono text-xs">

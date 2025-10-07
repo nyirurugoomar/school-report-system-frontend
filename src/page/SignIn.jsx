@@ -2,10 +2,12 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { signin } from '../api/auth'
 import { setUser } from '../utils/auth'
-import logo from '../assets/Partnershiplogo.png'
+import logo from '../assets/log2.png'
+import { useTracking } from '../hooks/useTracking'
 
 function SignIn() {
   const navigate = useNavigate()
+  const { trackFormSubmission, trackLoginAttempt } = useTracking()
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -26,6 +28,12 @@ function SignIn() {
     e.preventDefault()
     setLoading(true)
     setError('')
+
+    // Track form submission
+    await trackFormSubmission('signin_form', {
+      username: formData.username,
+      timestamp: new Date().toISOString()
+    })
 
     console.log('Form submitted with data:', formData)
 
@@ -52,6 +60,12 @@ function SignIn() {
         console.log('User role stored:', response.role)
       }
       
+      // Track successful login
+      await trackLoginAttempt(formData.username, true, {
+        userRole: response.user?.role || response.role,
+        timestamp: new Date().toISOString()
+      })
+      
       // Navigate based on user role
       const userRole = response.user?.role || response.role
       if (userRole && userRole.toLowerCase() === 'admin') {
@@ -65,6 +79,12 @@ function SignIn() {
       console.error('Signin error:', error)
       console.error('Error response:', error.response)
       console.error('Error message:', error.message)
+      
+      // Track failed login
+      await trackLoginAttempt(formData.username, false, {
+        error: error.message,
+        timestamp: new Date().toISOString()
+      })
       
       // More detailed error handling
       let errorMessage = 'Login failed. Please try again.'
@@ -90,7 +110,7 @@ function SignIn() {
     <div className='min-h-screen bg-slate-800 flex flex-col justify-center items-center px-4 py-8'>
       {/* Header */}
       <div className='text-center mb-6 sm:mb-8'>
-        <img src={logo} alt="logo" className='w-32 h-32 sm:w-48 sm:h-48 lg:w-60 lg:h-60' />
+        <img src={logo} alt="logo" className='w-32 h-32 sm:w-48 sm:h-48 lg:w-84 lg:h-60' />
       </div>
       <div className='text-center mb-6 sm:mb-8'>
         <h1 className='text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2'>Welcome Back</h1>
