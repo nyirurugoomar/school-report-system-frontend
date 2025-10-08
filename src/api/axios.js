@@ -2,8 +2,8 @@ import axios from 'axios'
 import TrackingService from '../services/TrackingService'
 
 const api = axios.create({
-  // baseURL: 'https://school-report-system-bc.onrender.com',
-  baseURL: 'http://localhost:3000',
+  baseURL: 'https://school-report-system-bc.onrender.com',
+  // baseURL: 'http://localhost:3000',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
