@@ -18,40 +18,81 @@ function App() {
   return (
     <>
       <Routes>
-        {/* Routes without layout */}
+        {/* Public routes - no authentication required */}
         <Route path='/' element={<SignIn />} />
         <Route path='/signin' element={<SignIn />} />
         <Route path='/signup' element={<SignUp />} />
         <Route path='/success' element={<Success />} />
-        {/* Routes with MainLayout */}
+        
+        {/* Protected routes - require authentication */}
         <Route path='/main' element={<MainLayout />}>
-          <Route path='comment' element={<Comment />} />
-          <Route path='attendance' element={<Attendance />} />
-          <Route path='marks' element={<Marks />} />
-          <Route path='create-marks' element={<CreateMarks />} />
-          <Route path='edit-marks/:marksId' element={<EditMarks />} />
+          <Route path='comment' element={
+            <ProtectedRoute>
+              <Comment />
+            </ProtectedRoute>
+          } />
+          <Route path='attendance' element={
+            <ProtectedRoute>
+              <Attendance />
+            </ProtectedRoute>
+          } />
+          <Route path='marks' element={
+            <ProtectedRoute>
+              <Marks />
+            </ProtectedRoute>
+          } />
+          <Route path='create-marks' element={
+            <ProtectedRoute>
+              <CreateMarks />
+            </ProtectedRoute>
+          } />
+          <Route path='edit-marks/:marksId' element={
+            <ProtectedRoute>
+              <EditMarks />
+            </ProtectedRoute>
+          } />
           <Route path='admin' element={
-          <ProtectedRoute requiredRole="admin" fallbackPath="comment">
-            <Admin />
-          </ProtectedRoute>
-        } />
+            <ProtectedRoute requiredRole="admin" fallbackPath="comment">
+              <Admin />
+            </ProtectedRoute>
+          } />
         </Route>
         
-        {/* Direct routes with MainLayout */}
+        {/* Direct protected routes with MainLayout */}
         <Route path='/comment' element={<MainLayout />}>
-          <Route index element={<Comment />} />
+          <Route index element={
+            <ProtectedRoute>
+              <Comment />
+            </ProtectedRoute>
+          } />
         </Route>
         <Route path='/attendance' element={<MainLayout />}>
-          <Route index element={<Attendance />} />
+          <Route index element={
+            <ProtectedRoute>
+              <Attendance />
+            </ProtectedRoute>
+          } />
         </Route>
         <Route path='/marks' element={<MainLayout />}>
-          <Route index element={<Marks />} />
+          <Route index element={
+            <ProtectedRoute>
+              <Marks />
+            </ProtectedRoute>
+          } />
         </Route>
         <Route path='/create-marks' element={<MainLayout />}>
-          <Route index element={<CreateMarks />} />
+          <Route index element={
+            <ProtectedRoute>
+              <CreateMarks />
+            </ProtectedRoute>
+          } />
         </Route>
         <Route path='/edit-marks/:marksId' element={<MainLayout />}>
-          <Route index element={<EditMarks />} />
+          <Route index element={
+            <ProtectedRoute>
+              <EditMarks />
+            </ProtectedRoute>
+          } />
         </Route>
         <Route path='/admin' element={<MainLayout />}>
           <Route index element={
@@ -60,10 +101,8 @@ function App() {
             </ProtectedRoute>
           } />
         </Route>
-        {/* <Route path='/schedule' element={<MainLayout />}>
-          <Route index element={<div className='px-4 py-8'><h1 className='text-4xl font-bold text-white text-center'>Schedule Page</h1></div>} />
-        </Route> */}
       </Routes>
+    
     </>
   )
 }
