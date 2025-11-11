@@ -1,5 +1,64 @@
 import api from './axios'
 
+const triggerPrintFromHtml = (htmlContent) => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    throw new Error('PDF generation is only supported in the browser environment.')
+  }
+
+  const printWindow = window.open('', '_blank')
+
+  if (printWindow && printWindow.document) {
+    printWindow.document.write(htmlContent)
+    printWindow.document.close()
+    printWindow.focus()
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print()
+        printWindow.close()
+      }, 300)
+    }
+    return
+  }
+
+  const iframe = document.createElement('iframe')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  iframe.srcdoc = htmlContent
+
+  const cleanup = () => {
+    setTimeout(() => {
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe)
+      }
+    }, 1000)
+  }
+
+  iframe.onload = () => {
+    try {
+      iframe.contentWindow?.focus()
+      iframe.contentWindow?.print()
+    } finally {
+      cleanup()
+    }
+  }
+
+  document.body.appendChild(iframe)
+}
+
+const sanitizeText = (value) => {
+  if (value === null || value === undefined) return ''
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export const getAttendanceReport = async (filters = {}) => {
   try {
     // Filter out empty strings and null values to prevent MongoDB ObjectId casting errors
@@ -137,7 +196,7 @@ export const getClassPerformanceReportNew = async (classId) => {
 
 export const downloadSchoolReportPDF = async (schoolId) => {
   try {
-    console.log('Downloading school report PDF for:', schoolId);
+    console.log('Downloading school report PDF for:', schoolId || 'all-schools');
     
     // First get the report data
     const reportData = await getSchoolReport();
@@ -465,19 +524,8 @@ export const downloadSchoolReportPDF = async (schoolId) => {
       </html>
     `;
     
-    // Convert HTML to PDF using browser's print functionality
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for content to load, then trigger print
-    printWindow.onload = function() {
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-    };
-    
+    triggerPrintFromHtml(htmlContent);
+
     console.log('PDF generation initiated successfully');
     return true;
   } catch (error) {
@@ -634,19 +682,8 @@ export const downloadMarksReportPDF = async (schoolId) => {
       </html>
     `;
     
-    // Convert HTML to PDF using browser's print functionality
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for content to load, then trigger print
-    printWindow.onload = function() {
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-    };
-    
+    triggerPrintFromHtml(htmlContent);
+
     console.log('Marks PDF generation initiated successfully');
     return true;
   } catch (error) {
@@ -802,19 +839,8 @@ export const downloadAttendanceReportPDF = async (schoolId) => {
       </html>
     `;
     
-    // Convert HTML to PDF using browser's print functionality
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for content to load, then trigger print
-    printWindow.onload = function() {
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-    };
-    
+    triggerPrintFromHtml(htmlContent);
+
     console.log('Attendance PDF generation initiated successfully');
     return true;
   } catch (error) {
@@ -1021,19 +1047,8 @@ export const downloadClassReportPDF = async (classId) => {
       </html>
     `;
     
-    // Convert HTML to PDF using browser's print functionality
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    
-    // Wait for content to load, then trigger print
-    printWindow.onload = function() {
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-    };
-    
+    triggerPrintFromHtml(htmlContent);
+
     console.log('Class PDF generation initiated successfully');
     return true;
   } catch (error) {
@@ -1041,3 +1056,411 @@ export const downloadClassReportPDF = async (classId) => {
     throw error;
   }
 };
+
+export const downloadCommentsReportPDF = async () => {
+  try {
+    console.log('Downloading comments report PDF')
+
+    const response = await api.get('/comments/admin/all')
+    const payload = response?.data ?? []
+    const commentsArray = Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.comments)
+          ? payload.comments
+          : []
+
+    const comments = commentsArray.filter(Boolean)
+    console.log('Comments report data received:', { count: comments.length })
+
+    const totalComments = comments.length
+    const uniqueSchools = new Set()
+    const uniqueClasses = new Set()
+    const uniqueTeachers = new Set()
+    const classCounts = new Map()
+    const subjectCounts = new Map()
+    const monthlyCounts = new Map()
+
+    comments.forEach((comment) => {
+      const schoolId = typeof comment.schoolId === 'object' ? comment.schoolId?._id : comment.schoolId
+      if (schoolId) uniqueSchools.add(schoolId)
+
+      if (comment.className) {
+        uniqueClasses.add(comment.className)
+        classCounts.set(comment.className, (classCounts.get(comment.className) || 0) + 1)
+      }
+
+      if (comment.subjectName) {
+        subjectCounts.set(comment.subjectName, (subjectCounts.get(comment.subjectName) || 0) + 1)
+      }
+
+      if (comment.teacherId) {
+        const teacherKey = typeof comment.teacherId === 'object'
+          ? comment.teacherId.username || comment.teacherId.email || comment.teacherId._id
+          : comment.teacherId
+        if (teacherKey) uniqueTeachers.add(teacherKey)
+      }
+
+      if (comment.createdAt || comment.date) {
+        const date = new Date(comment.createdAt || comment.date)
+        if (!Number.isNaN(date.valueOf())) {
+          const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+          monthlyCounts.set(key, (monthlyCounts.get(key) || 0) + 1)
+        }
+      }
+    })
+
+    const toSortedArray = (map) =>
+      Array.from(map.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+
+    const topClasses = toSortedArray(classCounts).slice(0, 7)
+    const topSubjects = toSortedArray(subjectCounts).slice(0, 7)
+    const trendData = toSortedArray(monthlyCounts).reverse()
+    const maxClassCount = topClasses[0]?.count || 1
+    const maxSubjectCount = topSubjects[0]?.count || 1
+    const maxTrendCount = trendData[trendData.length - 1]?.count || 1
+
+    const recentComments = comments
+      .slice()
+      .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date))
+      .slice(0, 20)
+
+    const formatDateTime = (value) => {
+      const date = new Date(value)
+      if (Number.isNaN(date.valueOf())) return 'N/A'
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Comment Insights Report</title>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            background: #f3f4f6;
+          }
+          .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #ffffff;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+          }
+          .header {
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+            color: white;
+            padding: 40px 32px;
+            text-align: center;
+          }
+          .header h1 {
+            font-size: 2.5em;
+            font-weight: 600;
+            margin-bottom: 10px;
+          }
+          .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+          }
+          .content {
+            padding: 36px 32px 48px;
+          }
+          .section {
+            margin-bottom: 36px;
+          }
+          .section h2 {
+            font-size: 1.75em;
+            color: #1d4ed8;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #bfdbfe;
+            padding-bottom: 8px;
+          }
+          .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+          }
+          .stat-card {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white;
+            border-radius: 16px;
+            padding: 24px 20px;
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.2);
+          }
+          .stat-card h3 {
+            font-size: 2.4em;
+            font-weight: 700;
+            margin-bottom: 8px;
+          }
+          .stat-card p {
+            font-size: 1.05em;
+            opacity: 0.85;
+          }
+          .chart-card {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 24px 20px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05);
+          }
+          .chart-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 16px;
+          }
+          .bar {
+            margin-bottom: 16px;
+          }
+          .bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 6px;
+            font-size: 0.95em;
+          }
+          .bar-track {
+            width: 100%;
+            height: 18px;
+            background: #e2e8f0;
+            border-radius: 999px;
+            overflow: hidden;
+          }
+          .bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #60a5fa 0%, #c084fc 100%);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            font-size: 0.75em;
+            color: #0f172a;
+            font-weight: 700;
+          }
+          .table-wrapper {
+            overflow-x: auto;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 720px;
+          }
+          thead {
+            background: #1d4ed8;
+            color: white;
+          }
+          th, td {
+            padding: 14px 16px;
+            text-align: left;
+          }
+          tbody tr:nth-child(even) {
+            background: #f8fafc;
+          }
+          tbody tr:nth-child(odd) {
+            background: #ffffff;
+          }
+          tbody tr:hover {
+            background: #e0f2fe;
+          }
+          .tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #dbeafe;
+            color: #1d4ed8;
+            font-weight: 600;
+            font-size: 0.8em;
+          }
+          .footer {
+            background: #0f172a;
+            color: #e2e8f0;
+            text-align: center;
+            padding: 20px 24px;
+          }
+          .footer p {
+            opacity: 0.8;
+            font-size: 0.9em;
+          }
+          @media print {
+            body { background: white; }
+            .container { box-shadow: none; }
+            .stat-card, .chart-card, .table-wrapper { break-inside: avoid; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>💬 Comment Insights Report</h1>
+            <p>Comprehensive analysis of classroom feedback</p>
+            <p>Generated on ${sanitizeText(new Date().toLocaleString())}</p>
+          </div>
+          <div class="content">
+            <div class="section">
+              <h2>Overview</h2>
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <h3>${totalComments}</h3>
+                  <p>Total Comments Collected</p>
+                </div>
+                <div class="stat-card">
+                  <h3>${uniqueSchools.size}</h3>
+                  <p>Schools Reporting</p>
+                </div>
+                <div class="stat-card">
+                  <h3>${uniqueClasses.size}</h3>
+                  <p>Classes Covered</p>
+                </div>
+                <div class="stat-card">
+                  <h3>${uniqueTeachers.size}</h3>
+                  <p>Reporting Teachers</p>
+                </div>
+              </div>
+            </div>
+            <div class="section">
+              <h2>Engagement Highlights</h2>
+              <div class="stats-grid">
+                <div class="chart-card">
+                  <div class="chart-title">Top Classes by Comment Volume</div>
+                  ${topClasses.map(({ name, count }) => {
+                    const percentage = Math.max(6, Math.round((count / maxClassCount) * 100))
+                    return `
+                      <div class="bar">
+                        <div class="bar-label">
+                          <span>${sanitizeText(name)}</span>
+                          <span>${count}</span>
+                        </div>
+                        <div class="bar-track">
+                          <div class="bar-fill" style="width: ${percentage}%;">
+                            ${count} comments
+                          </div>
+                        </div>
+                      </div>
+                    `
+                  }).join('') || '<p>No class data available.</p>'}
+                </div>
+                <div class="chart-card">
+                  <div class="chart-title">Top Subjects Discussed</div>
+                  ${topSubjects.map(({ name, count }) => {
+                    const percentage = Math.max(6, Math.round((count / maxSubjectCount) * 100))
+                    return `
+                      <div class="bar">
+                        <div class="bar-label">
+                          <span>${sanitizeText(name)}</span>
+                          <span>${count}</span>
+                        </div>
+                        <div class="bar-track">
+                          <div class="bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%); color: #78350f;">
+                            ${count} comments
+                          </div>
+                        </div>
+                      </div>
+                    `
+                  }).join('') || '<p>No subject data available.</p>'}
+                </div>
+              </div>
+            </div>
+            <div class="section">
+              <h2>Trend Overview</h2>
+              <div class="chart-card">
+                <div class="chart-title">Monthly Comment Submissions</div>
+                ${trendData.length ? trendData.map(({ name, count }) => {
+                  const percentage = Math.max(6, Math.round((count / maxTrendCount) * 100))
+                  const [year, month] = name.split('-')
+                  const formatted = new Date(Number(year), Number(month) - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                  return `
+                    <div class="bar">
+                      <div class="bar-label">
+                        <span>${formatted}</span>
+                        <span>${count}</span>
+                      </div>
+                      <div class="bar-track">
+                        <div class="bar-fill" style="width: ${percentage}%; background: linear-gradient(90deg, #22d3ee 0%, #0ea5e9 100%); color: #0f172a;">
+                          ${count}
+                        </div>
+                      </div>
+                    </div>
+                  `
+                }).join('') : '<p>No timeline data available.</p>'}
+              </div>
+            </div>
+            <div class="section">
+              <h2>Recent Comments Snapshot</h2>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Class</th>
+                      <th>Subject</th>
+                      <th>Teacher</th>
+                      <th>Students</th>
+                      <th>Submitted</th>
+                      <th>Summary</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${recentComments.length ? recentComments.map((comment) => {
+                      const teacherName = typeof comment.teacherId === 'object'
+                        ? (comment.teacherId.username || comment.teacherId.email || comment.teacherId._id || 'Unknown Teacher')
+                        : (comment.teacherId || 'Unknown Teacher')
+                      const summary = comment.successStory || comment.challenge || comment.generalComment || 'No details provided.'
+                      return `
+                        <tr>
+                          <td>${sanitizeText(comment.className || 'N/A')}</td>
+                          <td><span class="tag">${sanitizeText(comment.subjectName || 'N/A')}</span></td>
+                          <td>${sanitizeText(teacherName)}</td>
+                          <td>${sanitizeText(comment.numberOfStudents ?? 'n/a')}</td>
+                          <td>${sanitizeText(formatDateTime(comment.createdAt || comment.date))}</td>
+                          <td>${sanitizeText(summary).slice(0, 140)}${summary.length > 140 ? '…' : ''}</td>
+                        </tr>
+                      `
+                    }).join('') : `
+                      <tr>
+                        <td colspan="6" style="text-align:center; padding: 24px;">No comments available.</td>
+                      </tr>
+                    `}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} School Report System • Comment Insights Report</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+
+    triggerPrintFromHtml(htmlContent)
+    console.log('Comments PDF generation initiated successfully')
+    return true
+  } catch (error) {
+    console.error('Download comments report PDF error:', error)
+    throw error
+  }
+}

@@ -30,6 +30,8 @@ import {
 } from '../api/auth'
 import { useTracking } from '../hooks/useTracking'
 
+const COMMENTS_PER_PAGE = 12
+
 function Admin() {
   const navigate = useNavigate()
   const { trackAdminDashboardAccess, trackDataAccess, trackReportGeneration } = useTracking()
@@ -47,6 +49,7 @@ function Admin() {
   const [schoolReport, setSchoolReport] = useState(null)
   const [selectedClassForStudents, setSelectedClassForStudents] = useState(null)
   const [showStudentsModal, setShowStudentsModal] = useState(false)
+  const [currentCommentPage, setCurrentCommentPage] = useState(1)
   
   // Filter states
   const [selectedClass, setSelectedClass] = useState('')
@@ -227,9 +230,6 @@ function Admin() {
     }
 
     if (newAdmin.password !== newAdmin.confirmPassword) {
-
-
-
       setError('Passwords do not match')
       return
     }
@@ -359,6 +359,16 @@ function Admin() {
     if (selectedClass && comment.className !== selectedClass) return false
     return true
   })
+
+  useEffect(() => {
+    setCurrentCommentPage(1)
+  }, [selectedClass, filteredComments.length])
+
+  const totalCommentPages = Math.max(1, Math.ceil(filteredComments.length / COMMENTS_PER_PAGE))
+  const paginatedComments = filteredComments.slice(
+    (currentCommentPage - 1) * COMMENTS_PER_PAGE,
+    currentCommentPage * COMMENTS_PER_PAGE
+  )
 
   const filteredAttendance = attendanceRecords.filter(record => {
     if (selectedClass && record.classId !== selectedClass) return false
@@ -593,54 +603,53 @@ function Admin() {
               </div>
             </div>
 
-            
             {/* Classes Overview */}
-<div className="bg-slate-700 rounded-lg p-4 sm:p-6">
-  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 space-y-2 sm:space-y-0">
-    <h3 className="text-base sm:text-lg font-semibold text-white">Classes Overview</h3>
-    <button
-      onClick={() => setShowCreateClassModal(true)}
-      className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-xs sm:text-sm w-full sm:w-auto"
-    >
-      + Add Class
-    </button>
-  </div>
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-    {classes.slice(0, 6).map(cls => (
-      <div 
-        key={cls._id} 
-        className="bg-slate-600 rounded-lg p-3 sm:p-4 cursor-pointer hover:bg-slate-500 transition-colors"
-        onClick={() => {
-          setSelectedClassForStudents(cls)
-          setShowStudentsModal(true)
-        }}
-      >
-        <div className="flex flex-col sm:flex-row justify-between items-start space-y-2 sm:space-y-0">
-          <div className="flex-1">
-            <h4 className="text-white font-medium text-sm sm:text-base">{getClassName(cls)}</h4>
-            <p className="text-slate-300 text-xs sm:text-sm">{getSubjectName(cls)}</p>
-            <p className="text-slate-400 text-xs">Room: {cls.classRoom || 'N/A'}</p>
-            <p className="text-blue-400 text-xs mt-1 sm:mt-2">Click to view students →</p>
-          </div>
-          <div className="text-right">
-            <p className="text-slate-400 text-xs">ID: {cls._id}</p>
-            <p className="text-slate-400 text-xs">
-              {students.filter(student => {
-                const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
-                return studentClassId === cls._id
-              }).length} students
-            </p>
-          </div>
-        </div>
-      </div>
-    ))}
-    {classes.length === 0 && (
-      <div className="col-span-full text-center text-slate-400 py-8">
-        <p>No classes found. Create your first class!</p>
-      </div>
-    )}
-  </div>
-</div>
+            <div className="bg-slate-700 rounded-lg p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 space-y-2 sm:space-y-0">
+                <h3 className="text-base sm:text-lg font-semibold text-white">Classes Overview</h3>
+                <button
+                  onClick={() => setShowCreateClassModal(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-xs sm:text-sm w-full sm:w-auto"
+                >
+                  + Add Class
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {classes.slice(0, 6).map(cls => (
+                  <div 
+                    key={cls._id} 
+                    className="bg-slate-600 rounded-lg p-3 sm:p-4 cursor-pointer hover:bg-slate-500 transition-colors"
+                    onClick={() => {
+                      setSelectedClassForStudents(cls)
+                      setShowStudentsModal(true)
+                    }}
+                  >
+                    <div className="flex flex-col sm:flex-row justify-between items-start space-y-2 sm:space-y-0">
+                      <div className="flex-1">
+                        <h4 className="text-white font-medium text-sm sm:text-base">{getClassName(cls)}</h4>
+                        <p className="text-slate-300 text-xs sm:text-sm">{getSubjectName(cls)}</p>
+                        <p className="text-slate-400 text-xs">Room: {cls.classRoom || 'N/A'}</p>
+                        <p className="text-blue-400 text-xs mt-1 sm:mt-2">Click to view students →</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-slate-400 text-xs">ID: {cls._id}</p>
+                        <p className="text-slate-400 text-xs">
+                          {students.filter(student => {
+                            const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
+                            return studentClassId === cls._id
+                          }).length} students
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {classes.length === 0 && (
+                  <div className="col-span-full text-center text-slate-400 py-8">
+                    <p>No classes found. Create your first class!</p>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Students Overview */}
             <div className="bg-slate-700 rounded-lg p-4 sm:p-6">
@@ -715,7 +724,7 @@ function Admin() {
                 <span className="text-sm text-slate-400 ml-2">- Admin View</span>
               </h3>
               <div className="space-y-4">
-                {filteredComments.map(comment => (
+                {paginatedComments.map(comment => (
                   <div key={comment._id} className="bg-slate-600 rounded-lg p-4 cursor-pointer hover:bg-slate-500 transition-colors" onClick={() => openCommentModal(comment)}>
                     <div className="flex justify-between items-start">
                         <div className="flex-1">
@@ -747,7 +756,7 @@ function Admin() {
                     </div>
                   </div>
                 ))}
-                {filteredComments.length === 0 && (
+                {paginatedComments.length === 0 && (
                   <div className="text-center py-12">
                     <div className="text-slate-400 text-6xl mb-4">💬</div>
                     <h4 className="text-xl font-medium text-white mb-2">No Comments Found</h4>
@@ -755,6 +764,30 @@ function Admin() {
                   </div>
                 )}
               </div>
+
+              {totalCommentPages > 1 && (
+                <div className="flex items-center justify-between pt-4 border-t border-slate-600">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentCommentPage((page) => Math.max(1, page - 1))}
+                    disabled={currentCommentPage === 1}
+                    className="px-3 py-2 rounded bg-slate-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-slate-300 text-sm">
+                    Page {currentCommentPage} of {totalCommentPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentCommentPage((page) => Math.min(totalCommentPages, page + 1))}
+                    disabled={currentCommentPage === totalCommentPages}
+                    className="px-3 py-2 rounded bg-slate-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1084,7 +1117,6 @@ function Admin() {
               </div>
             </div>
 
-
             {/* PDF Download Section */}
             <div className="bg-slate-700 rounded-lg p-6">
               <h3 className="text-lg font-semibold text-white mb-4">📄 Download PDF Reports</h3>
@@ -1172,13 +1204,28 @@ function Admin() {
                 </button>
                 
                 {/* Class Reports PDF */}
-                <div className="bg-slate-600 rounded-lg p-4">
-                  <div className="text-center text-slate-400">
-                    <span className="text-2xl mb-2 block">📄</span>
-                    <h4 className="font-medium">Class PDFs</h4>
-                    <p className="text-sm text-slate-500 mt-1">Available per class</p>
+                <button
+                  onClick={async () => {
+                    try {
+                      setLoading(true)
+                      setError('')
+
+                      await reportsAPI.downloadCommentsReportPDF()
+                    } catch (error) {
+                      console.error('Error downloading comments report PDF:', error)
+                      setError('Failed to generate comments report PDF: ' + (error.response?.data?.message || error.message))
+                    } finally {
+                      setLoading(false)
+                    }
+                  }}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white p-4 rounded-lg transition-colors"
+                >
+                  <div className="text-center">
+                    <span className="text-2xl mb-2 block">💬</span>
+                    <h4 className="font-medium">Comments PDF</h4>
+                    <p className="text-sm text-yellow-200 mt-1">Feedback insights & charts</p>
                   </div>
-                </div>
+                </button>
               </div>
             </div>
 
@@ -1274,7 +1321,7 @@ function Admin() {
             {/* User Management */}
             <div className="bg-slate-700 rounded-lg p-6">
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-semibold text-white">👥 User Management</h3>
+                <h3 className="text-lg font-semibold text_white">👥 User Management</h3>
                 <button
                   onClick={() => setShowCreateAdminModal(true)}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
@@ -1621,7 +1668,6 @@ function Admin() {
                 </div>
               </div>
 
-
               {/* School Information */}
               {selectedComment.schoolId && (
                 <div className="bg-slate-700 rounded-lg p-4">
@@ -1685,36 +1731,11 @@ function Admin() {
                   <div className="border-t border-green-600 pt-4 mb-4">
                     <h5 className="text-green-300 font-medium mb-3">🏠 Detailed Address Information</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* <div>
-                        <p className="text-gray-400 text-sm">🛣️ Street:</p>
-                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.street || 'Unknown Street'}</p>
-                      </div> */}
-                      {/* <div>
-                        <p className="text-gray-400 text-sm">🏘️ Village:</p>
-                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.village || 'Unknown Village'}</p>
-                      </div> */}
-
-                      {/* Full Address */}
-                    {selectedComment.gpsLocation.address?.fullAddress && (
-                      <div className="mt-4 p-3 bg-green-900 rounded-lg">
-                       
-                        <p className="text-green-300 font-medium">{selectedComment.gpsLocation.address.fullAddress}</p>
-                      </div>
-                    )}
-                      
-                      
-                      {/* <div>
-                        <p className="text-gray-400 text-sm">🗺️ Province:</p>
-                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.state || 'Unknown State'}</p>
-                      </div> */}
-                      {/* <div>
-                        <p className="text-gray-400 text-sm">🌍 Country:</p>
-                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.country || 'Unknown Country'}</p>
-                      </div> */}
-                      {/* <div>
-                        <p className="text-gray-400 text-sm">📮 Postal Code:</p>
-                        <p className="text-white font-medium">{selectedComment.gpsLocation.address?.postalCode || 'Unknown'}</p>
-                      </div> */}
+                      {selectedComment.gpsLocation.address?.fullAddress && (
+                        <div className="mt-4 p-3 bg-green-900 rounded-lg">
+                          <p className="text-green-300 font-medium">{selectedComment.gpsLocation.address.fullAddress}</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-gray-400 text-sm">🕐 Captured:</p>
                         <p className="text-white font-medium text-xs">
@@ -1725,8 +1746,6 @@ function Admin() {
                         </p>
                       </div>
                     </div>
-                    
-                    
                   </div>
                   
                   {/* Google Maps Button */}
@@ -1747,8 +1766,6 @@ function Admin() {
                 </div>
               )}
 
-
-              
               {/* No Tracking Data */}
               {!selectedComment.tracking && !selectedComment.gpsLocation && (
                 <div className="bg-gray-700 rounded-lg p-4">

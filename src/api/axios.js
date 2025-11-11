@@ -5,7 +5,7 @@ const api = axios.create({
   // baseURL: 'https://school-report-system-bc.onrender.com',
   baseURL: import.meta.env.VITE_API_BASE_URL,
   // baseURL: 'http://localhost:3000',
-  timeout: 10000,
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },
