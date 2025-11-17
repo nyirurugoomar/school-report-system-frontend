@@ -29,6 +29,7 @@ import {
   getStudentPerformanceReportAdmin
 } from '../api/auth'
 import { useTracking } from '../hooks/useTracking'
+import { utils, writeFile } from 'xlsx'
 
 const COMMENTS_PER_PAGE = 12
 
@@ -93,6 +94,50 @@ function Admin() {
   useEffect(() => {
     loadDashboardData()
   }, [])
+
+  const handleExportSchoolReport = () => {
+    if (!schoolReport || !schoolReport.schools || schoolReport.schools.length === 0) {
+      alert('Please generate the school report before exporting as Excel.')
+      return
+    }
+
+    const rows = schoolReport.schools.map((school) => ({
+      'School Name': school.schoolName || 'N/A',
+      'Classes': school.statistics?.totalClasses ?? 0,
+      'Students': school.statistics?.totalStudents ?? 0,
+      'Subjects': school.statistics?.totalSubjects ?? 0,
+      'Attendance Records': school.statistics?.totalAttendanceRecords ?? 0,
+      'Marks Entries': school.statistics?.totalMarks ?? 0,
+      'Present': school.statistics?.attendanceSummary?.present ?? 0,
+      'Absent': school.statistics?.attendanceSummary?.absent ?? 0,
+      'Late': school.statistics?.attendanceSummary?.late ?? 0,
+      'Attendance Rate %': school.statistics?.attendanceSummary?.attendanceRate ?? 0,
+      'Average Score %': school.statistics?.marksSummary?.average ?? 0,
+      'Highest Score %': school.statistics?.marksSummary?.highest ?? 0,
+      'Lowest Score %': school.statistics?.marksSummary?.lowest ?? 0
+    }))
+
+    rows.unshift({
+      'School Name': 'Summary (All Schools)',
+      'Classes': schoolReport.totalClasses ?? schoolReport.summary?.totalClasses ?? 0,
+      'Students': schoolReport.totalStudents ?? schoolReport.summary?.totalStudents ?? 0,
+      'Subjects': schoolReport.summary?.totalSubjects ?? 0,
+      'Attendance Records': schoolReport.summary?.totalAttendanceRecords ?? 0,
+      'Marks Entries': schoolReport.summary?.totalMarks ?? 0,
+      'Present': schoolReport.attendanceSummary?.present ?? 0,
+      'Absent': schoolReport.attendanceSummary?.absent ?? 0,
+      'Late': schoolReport.attendanceSummary?.late ?? 0,
+      'Attendance Rate %': schoolReport.attendanceSummary?.attendanceRate ?? 0,
+      'Average Score %': schoolReport.marksSummary?.average ?? 0,
+      'Highest Score %': schoolReport.marksSummary?.highest ?? 0,
+      'Lowest Score %': schoolReport.marksSummary?.lowest ?? 0
+    })
+
+    const worksheet = utils.json_to_sheet(rows)
+    const workbook = utils.book_new()
+    utils.book_append_sheet(workbook, worksheet, 'Schools')
+    writeFile(workbook, `school-report-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
 
   const loadDashboardData = async () => {
     setLoading(true)
@@ -978,25 +1023,85 @@ function Admin() {
                   {/* Individual School Details */}
                   {schoolReport.schools && schoolReport.schools.length > 0 && (
                     <div className="mt-6">
-                      <h5 className="text-white font-semibold mb-4">🏫 Individual School Details</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {schoolReport.schools.map((school, index) => (
-                          <div key={school.schoolId || index} className="bg-slate-500 rounded-lg p-4">
-                            <h6 className="text-white font-semibold mb-3">{school.schoolName}</h6>
-                            <div className="grid grid-cols-2 gap-2 text-slate-300 text-sm">
-                              <div>Classes: {school.statistics.totalClasses}</div>
-                              <div>Students: {school.statistics.totalStudents}</div>
-                              <div>Subjects: {school.statistics.totalSubjects}</div>
-                              <div>Records: {school.statistics.totalAttendanceRecords}</div>
-                              <div>Marks: {school.statistics.totalMarks}</div>
-                              <div>Rate: {school.statistics.attendanceSummary.attendanceRate}%</div>
-                              <div>Present: {school.statistics.attendanceSummary.present}</div>
-                              <div>Absent: {school.statistics.attendanceSummary.absent}</div>
-                              <div>Late: {school.statistics.attendanceSummary.late}</div>
-                              <div>Avg Score: {school.statistics.marksSummary.average}%</div>
-                            </div>
-                          </div>
-                        ))}
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
+                        <h5 className="text-white font-semibold">🏫 Individual School Details</h5>
+                        <button
+                          type="button"
+                          onClick={handleExportSchoolReport}
+                          className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                          disabled={!schoolReport.schools.length}
+                        >
+                          Export to Excel
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto rounded-lg border border-slate-500">
+                        <table className="min-w-full text-sm text-left">
+                          <thead className="bg-slate-800 text-slate-200 uppercase text-xs">
+                            <tr>
+                              <th className="px-4 py-3 border-b border-slate-600">School Name</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Classes</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Students</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Subjects</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Attendance Records</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Marks Entries</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Present</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Absent</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Late</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Attendance %</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Average %</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Highest %</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Lowest %</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {schoolReport.schools.map((school, index) => (
+                              <tr
+                                key={school.schoolId || index}
+                                className={index % 2 === 0 ? 'bg-slate-700 text-white' : 'bg-slate-600 text-white'}
+                              >
+                                <td className="px-4 py-3 border-b border-slate-500 font-medium">
+                                  {school.schoolName || 'N/A'}
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {school.statistics?.totalClasses ?? 0}
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {school.statistics?.totalStudents ?? 0}
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {school.statistics?.totalSubjects ?? 0}
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {school.statistics?.totalAttendanceRecords ?? 0}
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {school.statistics?.totalMarks ?? 0}
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {school.statistics?.attendanceSummary?.present ?? 0}
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {school.statistics?.attendanceSummary?.absent ?? 0}
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {school.statistics?.attendanceSummary?.late ?? 0}
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {(school.statistics?.attendanceSummary?.attendanceRate ?? 0)}%
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {(school.statistics?.marksSummary?.average ?? 0)}%
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {(school.statistics?.marksSummary?.highest ?? 0)}%
+                                </td>
+                                <td className="px-4 py-3 border-b border-slate-500">
+                                  {(school.statistics?.marksSummary?.lowest ?? 0)}%
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
