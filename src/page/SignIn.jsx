@@ -72,7 +72,7 @@ function SignIn() {
         console.log('Admin user detected, redirecting to admin dashboard')
         navigate('/admin')
       } else {
-        console.log('Regular user detected, redirecting to comment page')
+        console.log('Regular user detected, redirecting to comments page')
         navigate('/comment')
       }
     } catch (error) {

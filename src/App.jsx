@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import SignIn from './page/SignIn'
 import SignUp from './page/SignUp'
 import Comment from './page/Comment'
+import RoleSelection from './page/RoleSelection'
 import MainLayout from './layouts/MainLayout'
 import Attendance from './page/Attendance'
 import Success from './page/Success'
@@ -54,6 +55,15 @@ function App() {
           <Route path='admin' element={
             <ProtectedRoute requiredRole="admin" fallbackPath="comment">
               <Admin />
+            </ProtectedRoute>
+          } />
+        </Route>
+        
+        {/* Role Selection Route */}
+        <Route path='/role-selection' element={<MainLayout />}>
+          <Route index element={
+            <ProtectedRoute>
+              <RoleSelection />
             </ProtectedRoute>
           } />
         </Route>

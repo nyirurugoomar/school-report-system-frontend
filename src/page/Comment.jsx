@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import * as commentAPI from '../api/comment'
 import * as classAPI from '../api/class'
 import LocationService from '../services/LocationService'
+import { getUserRole } from '../utils/auth'
 
 function Comment() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const storedRole = getUserRole()
+  const commenterRole = (searchParams.get('role') || storedRole || 'teacher').toLowerCase()
+  
   const [formData, setFormData] = useState({
     schoolId: '',
     className: '',
@@ -13,6 +18,8 @@ function Comment() {
     numberOfStudents: '',
     successStory: '',
     challenge: '',
+    modelLesson: '', // New field for mentor
+    lessonObservation: '', // New field for mentor
     date: new Date().toISOString().split('T')[0]
   })
   const [loading, setLoading] = useState(false)
@@ -169,6 +176,31 @@ function Comment() {
       return
     }
 
+    // Role-specific validation
+    if (commenterRole === 'teacher') {
+      if (!formData.successStory?.trim()) {
+        setError('Success Story is required for teacher comments')
+        setLoading(false)
+        return
+      }
+      if (!formData.challenge?.trim()) {
+        setError('Challenge is required for teacher comments')
+        setLoading(false)
+        return
+      }
+    } else if (commenterRole === 'mentor') {
+      if (!formData.modelLesson?.trim()) {
+        setError('Model Lesson is required for mentor comments')
+        setLoading(false)
+        return
+      }
+      if (!formData.lessonObservation?.trim()) {
+        setError('Lesson Observation is required for mentor comments')
+        setLoading(false)
+        return
+      }
+    }
+
     // Check if GPS location is required and captured
     if (!gpsLocation) {
       setError('GPS location is required. Please capture your location before submitting.')
@@ -182,19 +214,38 @@ function Comment() {
         className: formData.className,
         subjectName: formData.subjectName,
         numberOfStudents: parseInt(formData.numberOfStudents),
-        successStory: formData.successStory.trim(),
-        challenge: formData.challenge.trim(),
         date: new Date(formData.date),
+        commenterRole: commenterRole, // Explicitly set the role
         _gpsLocation: gpsLocation // GPS location data
       }
 
-      console.log('Sending comment data:', commentData)
+      // Add role-specific fields
+      if (commenterRole === 'teacher') {
+        commentData.successStory = formData.successStory.trim()
+        commentData.challenge = formData.challenge.trim()
+      } else if (commenterRole === 'mentor') {
+        commentData.modelLesson = formData.modelLesson.trim()
+        commentData.lessonObservation = formData.lessonObservation.trim()
+        // Mentors can also have successStory and challenge if needed
+        if (formData.successStory?.trim()) {
+          commentData.successStory = formData.successStory.trim()
+        }
+        if (formData.challenge?.trim()) {
+          commentData.challenge = formData.challenge.trim()
+        }
+      }
 
-      const response = await commentAPI.createComment(commentData)
+      console.log('Sending comment data:', commentData)
+      console.log('Commenter role:', commenterRole)
+
+      // Use the appropriate API endpoint based on role
+      const response = commenterRole === 'mentor' 
+        ? await commentAPI.createMentorComment(commentData)
+        : await commentAPI.createComment(commentData)
       console.log('Comment created successfully:', response)
       
       // Show success message immediately and stop loading
-      setSuccess('✅ Comment submitted successfully! Redirecting...')
+      setSuccess(`✅ ${commenterRole === 'mentor' ? 'Mentor' : 'Teacher'} comment submitted successfully! Redirecting...`)
       setLoading(false) // Stop loading immediately so success message shows
       
       // Reset form data
@@ -205,6 +256,8 @@ function Comment() {
         numberOfStudents: '',
         successStory: '',
         challenge: '',
+        modelLesson: '',
+        lessonObservation: '',
         date: new Date().toISOString().split('T')[0]
       })
       setSelectedSchool('')
@@ -240,7 +293,9 @@ function Comment() {
   return (
     <div className='min-h-screen bg-slate-800 px-4 py-8'>
       <div className='max-w-4xl mx-auto'>
-        <h1 className='text-4xl font-bold text-white mb-8 text-center'>Make a daily attendance</h1>
+        <h1 className='text-4xl font-bold text-white mb-8 text-center'>
+          {commenterRole === 'mentor' ? 'Mentor Observation' : 'Daily Activity'}
+        </h1>
         
         {success && (
           <div className='bg-green-500/20 border border-green-500 text-green-400 px-4 py-3 rounded-lg text-sm mb-6'>
@@ -481,29 +536,67 @@ function Comment() {
             />
           </div>
           
-          <div className='space-y-2'>
-            <label className='block text-white text-sm font-medium'>Enter Success Story</label>
-            <textarea 
-              name="successStory"
-              value={formData.successStory}
-              onChange={handleChange}
-              placeholder='Enter Success Story'
-              className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400 resize-none'
-              rows={4}
-            />
-          </div>
-          
-          <div className='space-y-2'>
-            <label className='block text-white text-sm font-medium'>Any Challenge</label>
-            <textarea 
-              name="challenge"
-              value={formData.challenge}
-              onChange={handleChange}
-              placeholder='Enter Challenge'
-              className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400 resize-none'
-              rows={4}
-            />
-          </div>
+          {/* Conditionally render fields based on role */}
+          {commenterRole === 'teacher' ? (
+            <>
+              <div className='space-y-2'>
+                <label className='block text-white text-sm font-medium'>Lesson Plan *</label>
+                <textarea 
+                  name="successStory"
+                  value={formData.successStory}
+                  onChange={handleChange}
+                  placeholder='Enter Success Story'
+                  required
+                  className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400 resize-none'
+                  rows={4}
+                />
+              </div>
+              
+              <div className='space-y-2'>
+                <label className='block text-white text-sm font-medium'>Lesson Observation *</label>
+                <textarea 
+                  name="challenge"
+                  value={formData.challenge}
+                  onChange={handleChange}
+                  placeholder='Enter Challenge'
+                  required
+                  className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400 resize-none'
+                  rows={4}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className='space-y-2'>
+                <label className='block text-white text-sm font-medium'>Model Lesson *</label>
+                <textarea 
+                  name="modelLesson"
+                  value={formData.modelLesson}
+                  onChange={handleChange}
+                  placeholder='Enter Model Lesson details'
+                  required
+                  className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400 resize-none'
+                  rows={4}
+                />
+              </div>
+              
+              <div className='space-y-2'>
+                <label className='block text-white text-sm font-medium'>Lesson Observation *</label>
+                <textarea 
+                  name="lessonObservation"
+                  value={formData.lessonObservation}
+                  onChange={handleChange}
+                  placeholder='Enter Lesson Observation'
+                  required
+                  className='w-full px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400 resize-none'
+                  rows={4}
+                />
+              </div>
+              
+              {/* Optional fields for mentor */}
+              
+            </>
+          )}
           
           <div className='pt-4'>
             <button 
@@ -512,10 +605,12 @@ function Comment() {
               className={`w-full font-semibold py-3 px-4 rounded-lg transition-colors duration-200 ${
                 loading || !gpsLocation 
                   ? 'bg-gray-500 text-gray-300 cursor-not-allowed' 
-                  : 'bg-green-500 hover:bg-green-600 text-white'
+                  : commenterRole === 'mentor'
+                    ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                    : 'bg-green-500 hover:bg-green-600 text-white'
               }`}
             >
-              {loading ? 'Submitting...' : !gpsLocation ? 'GPS Location Required' : 'Submit Comment'}
+              {loading ? 'Submitting...' : !gpsLocation ? 'GPS Location Required' : `Submit ${commenterRole === 'mentor' ? 'Mentor' : 'Teacher'} Comment`}
             </button>
           </div>
         </form>

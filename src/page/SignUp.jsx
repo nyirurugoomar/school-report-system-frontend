@@ -7,7 +7,8 @@ function SignUp() {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    password: ''
+    password: '',
+    role: ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -26,6 +27,13 @@ function SignUp() {
     setLoading(true)
     setError('')
 
+    // Validate role selection
+    if (!formData.role) {
+      setError('Please select a role (Teacher or Mentor)')
+      setLoading(false)
+      return
+    }
+
     try {
       const response = await signup(formData)
       
@@ -34,8 +42,8 @@ function SignUp() {
         localStorage.setItem('token', response.token)
       }
       
-      // Navigate to attendance page or success page
-      navigate('/comment')
+      // Navigate to comment page with role parameter
+      navigate(`/comment?role=${formData.role}`)
     } catch (error) {
       console.error('Signup error:', error)
       setError(error.response?.data?.message || 'Registration failed. Please try again.')
@@ -100,6 +108,31 @@ function SignUp() {
             minLength={6}
             className='w-full px-3 sm:px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-slate-400 text-sm sm:text-base'
           />
+        </div>
+        
+        <div className='space-y-2'>
+          <label className='block text-white text-sm font-medium'>Select Role *</label>
+          <select
+            name="role"
+            value={formData.role}
+            onChange={handleChange}
+            required
+            className='w-full px-3 sm:px-4 py-3 bg-slate-700 text-white rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm sm:text-base'
+          >
+            <option value="">Select a role</option>
+            <option value="teacher">👨‍🏫 Teacher</option>
+            <option value="mentor">👨‍💼 Mentor</option>
+          </select>
+          {formData.role === 'teacher' && (
+            <p className='text-green-300 text-xs mt-1'>
+              Teacher: To evaluate the daily activity of the students include comment and attendance of students
+            </p>
+          )}
+          {formData.role === 'mentor' && (
+            <p className='text-blue-300 text-xs mt-1'>
+              Mentor: To evaluate Teacher and guide them to improve their teaching skills
+            </p>
+          )}
         </div>
         
         <button 

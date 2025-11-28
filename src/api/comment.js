@@ -25,6 +25,19 @@ export const createComment = async (commentData) => {
   }
 };
 
+export const createMentorComment = async (commentData) => {
+  try {
+    console.log('Making create mentor comment request to:', `${api.defaults.baseURL}/comments/mentor`);
+    console.log('Mentor comment data being sent:', commentData);
+    const response = await api.post('/comments/mentor', commentData);
+    console.log('Create mentor comment response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Create mentor comment API error:', error);
+    throw error;
+  }
+};
+
 export const getComments = async () => {
   try {
     console.log('Making get comments request to:', `${api.defaults.baseURL}/comments`);
