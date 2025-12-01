@@ -18,10 +18,14 @@ function Navbar() {
   // Check if user is admin (hide Comments, Attendance, Marks for all admins)
   const userIsAdmin = isAdmin()
   
+  // Check if user is mentor (hide Marks for mentors)
+  const userIsMentor = getUserRole()?.toLowerCase() === 'mentor'
+  
   // Debug: Log user role information
   const userRole = getUserRole()
   console.log('Navbar - Current user role:', userRole)
   console.log('Navbar - Is admin:', userIsAdmin)
+  console.log('Navbar - Is mentor:', userIsMentor)
   console.log('Navbar - Current path:', location.pathname)
 
   // Logout functionality
@@ -89,16 +93,19 @@ function Navbar() {
               >
                 Attendance
               </Link>
-              <Link 
-                to="/marks" 
-                className={`px-4 py-2 rounded-md transition-colors ${
-                  isActive('/marks') 
-                    ? 'bg-slate-700 text-white' 
-                    : 'text-gray-300 hover:text-white'
-                }`}
-              >
-                Marks
-              </Link>
+              {/* Hide Marks tab for mentors */}
+              {!userIsMentor && (
+                <Link 
+                  to="/marks" 
+                  className={`px-4 py-2 rounded-md transition-colors ${
+                    isActive('/marks') 
+                      ? 'bg-slate-700 text-white' 
+                      : 'text-gray-300 hover:text-white'
+                  }`}
+                >
+                  Marks
+                </Link>
+              )}
             </>
           )}
           {isAdmin() && (
@@ -186,17 +193,20 @@ function Navbar() {
                 >
                   📊 Attendance
                 </Link>
-                <Link 
-                  to="/marks" 
-                  onClick={handleLinkClick}
-                  className={`px-4 py-3 rounded-md transition-colors ${
-                    isActive('/marks') 
-                      ? 'bg-slate-700 text-white' 
-                      : 'text-gray-300 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  📈 Marks
-                </Link>
+                {/* Hide Marks tab for mentors */}
+                {!userIsMentor && (
+                  <Link 
+                    to="/marks" 
+                    onClick={handleLinkClick}
+                    className={`px-4 py-3 rounded-md transition-colors ${
+                      isActive('/marks') 
+                        ? 'bg-slate-700 text-white' 
+                        : 'text-gray-300 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    📈 Marks
+                  </Link>
+                )}
               </>
             )}
             {isAdmin() && (

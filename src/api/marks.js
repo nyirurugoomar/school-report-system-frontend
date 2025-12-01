@@ -290,3 +290,87 @@ export const getMarksByExamType = async (examType, additionalFilters = {}) => {
     throw error;
   }
 };
+
+// Export marks to Excel (uses backend endpoint)
+export const exportMarksToExcel = async () => {
+  try {
+    console.log('Making export marks to Excel request to:', `${api.defaults.baseURL}/reports/marks/excel`);
+    
+    const response = await api.get('/reports/marks/excel', {
+      responseType: 'blob', // Important: handle as blob for file download
+    });
+    
+    console.log('Export marks to Excel response:', response);
+    console.log('Response headers:', response.headers);
+    console.log('Response data type:', typeof response.data);
+    console.log('Response data is Blob:', response.data instanceof Blob);
+    
+    // Check if response is actually a blob (Excel file) or JSON error
+    if (response.data instanceof Blob) {
+      // Check the blob size - if it's very small, it might be an error JSON
+      if (response.data.size < 100) {
+        // Small blob, might be JSON error - check it
+        const text = await response.data.text();
+        try {
+          const jsonData = JSON.parse(text);
+          // If it parses as JSON, it's an error response
+          console.error('Backend returned JSON error instead of Excel:', jsonData);
+          throw new Error(jsonData.message || jsonData.error || 'Backend returned error instead of Excel file');
+        } catch (parseError) {
+          // Not JSON, proceed with download
+        }
+      }
+      
+      // It's a valid blob - download it directly
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `marks-report-${new Date().toISOString().split('T')[0]}.xlsx`;
+      
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+          // Decode URI if needed
+          try {
+            filename = decodeURIComponent(filename);
+          } catch (e) {
+            // Keep original filename if decode fails
+          }
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up after a short delay
+      setTimeout(() => {
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      return { success: true, filename };
+    } else {
+      // Response is not a blob - might be JSON error
+      console.error('Response is not a blob:', response.data);
+      throw new Error('Backend did not return Excel file. Check backend endpoint.');
+    }
+  } catch (error) {
+    console.error('Export marks to Excel API error:', error);
+    
+    // If error response has data, try to extract error message
+    if (error.response) {
+      const contentType = error.response.headers['content-type'];
+      if (contentType && contentType.includes('application/json')) {
+        const errorData = error.response.data;
+        throw new Error(errorData.message || errorData.error || 'Failed to export marks report');
+      }
+    }
+    
+    throw error;
+  }
+};

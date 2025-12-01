@@ -169,6 +169,16 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
 
   const loadMarks = async () => {
     try {
+      // Get current user's teacherId to filter marks
+      const user = getUser()
+      const currentTeacherId = user?._id || user?.id || user?.userId
+      
+      if (!currentTeacherId) {
+        console.warn('No teacher ID found for current user')
+        setError('Unable to identify teacher. Please log in again.')
+        return
+      }
+      
       // Clean filters before sending to API
       const cleanFilters = Object.entries(filters).reduce((acc, [key, value]) => {
         if (value !== '' && value !== null && value !== undefined && value.toString().trim() !== '') {
@@ -178,23 +188,38 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
       }, {});
       
       console.log('Loading marks with filters:', filters);
+      console.log('Current teacher ID:', currentTeacherId);
       console.log('Clean filters being sent:', cleanFilters);
       
       const requestFilters = { ...cleanFilters };
       delete requestFilters.academicTerm;
       delete requestFilters.examType;
+      
+      // Note: Backend should filter by teacherId from JWT token automatically
+      // But we'll also filter client-side as a safety measure
 
       const marksData = await marksAPI.getMarks(requestFilters);
       console.log('Marks data received:', marksData);
-      console.log('Number of marks:', marksData?.length || 0);
+      console.log('Number of marks before filtering:', marksData?.length || 0);
       
-      setMarks(marksData);
+      // Client-side filtering: Only show marks for the current teacher
+      // This is a safety measure in case backend doesn't filter correctly
+      const filteredMarks = (marksData || []).filter(mark => {
+        const markTeacherId = mark.teacherId?._id || mark.teacherId || mark.teacherId?.id
+        return markTeacherId === currentTeacherId || markTeacherId?.toString() === currentTeacherId?.toString()
+      })
+      
+      console.log('Number of marks after teacher filtering:', filteredMarks.length);
+      console.log('Current teacher ID for filtering:', currentTeacherId);
+      
+      setMarks(filteredMarks);
     } catch (error) {
       console.error('Error loading marks:', error);
       if (error.response) {
         console.error('Backend error response:', error.response.data);
         console.error('Backend error status:', error.response.status);
       }
+      setError('Failed to load marks. Please try again.')
     }
   }
 
@@ -234,22 +259,44 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
 
     try {
       setClassMarksLoading(true)
+      
+      // Get current user's teacherId to filter marks
+      const user = getUser()
+      const currentTeacherId = user?._id || user?.id || user?.userId || user?.teacherId
+      
+      if (!currentTeacherId) {
+        console.warn('No teacher ID found when loading existing marks')
+        setClassMarksLoading(false)
+        return
+      }
+      
       const existing = await marksAPI.getMarksByClass(selectedClassId, {
         academicYear: examInfo.academicYear,
         academicTerm: examInfo.academicTerm,
         examType: examInfo.examType
       })
       
+      // Filter by term/exam AND by current teacher
       const filteredExisting = (existing || []).filter(record => {
         const recordYear = record.academicYear || record.academic_year
         const recordTerm = record.academicTerm || record.academic_term
         const recordExamType = record.examType || record.exam_type
+        const recordTeacherId = record.teacherId?._id || record.teacherId || record.teacherId?.id
         
-        return (
+        // Must match term/exam filters
+        const matchesFilters = (
           (!examInfo.academicYear || recordYear === examInfo.academicYear) &&
           (!examInfo.academicTerm || recordTerm === examInfo.academicTerm) &&
           (!examInfo.examType || recordExamType === examInfo.examType)
         )
+        
+        // Must belong to current teacher
+        const matchesTeacher = (
+          recordTeacherId === currentTeacherId || 
+          recordTeacherId?.toString() === currentTeacherId?.toString()
+        )
+        
+        return matchesFilters && matchesTeacher
       })
 
       const combinationKey = getCombinationKey(
@@ -258,13 +305,37 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
         examInfo.examType
       )
 
+      // Extract maxMarks from existing records if available
+      // This allows the total marks to be auto-populated when filtering by term
+      if (filteredExisting.length > 0) {
+        // Try to find maxMarks from any record (prefer maxMarks field)
+        let maxMarks = null
+        for (const record of filteredExisting) {
+          if (record.maxMarks) {
+            maxMarks = record.maxMarks
+            break
+          }
+        }
+        // If no maxMarks found, use totalMarks from first record as fallback
+        if (!maxMarks && filteredExisting[0].totalMarks) {
+          maxMarks = filteredExisting[0].totalMarks
+        }
+        // Update examInfo.totalMarks if we found a value and it's different
+        if (maxMarks && maxMarks !== examInfo.totalMarks) {
+          setExamInfo(prev => ({
+            ...prev,
+            totalMarks: Number(maxMarks) || 100
+          }))
+        }
+      }
+
       const map = {}
       filteredExisting.forEach(record => {
         const studentId = record.studentId?._id || record.studentId
         if (!studentId) return
         map[studentId] = {
           markId: record._id,
-          score: record.totalMarks,
+          score: record.totalMarks || record.marks,
           savedKey: combinationKey
         }
       })
@@ -488,10 +559,14 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
   }
 
   const handleExamInfoChange = (name, value) => {
-    setExamInfo(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    setExamInfo(prev => {
+      const newValue = { ...prev, [name]: value }
+      // If totalMarks is being changed, mark as pending changes
+      if (name === 'totalMarks' && prev.totalMarks !== value) {
+        setHasPendingChanges(true)
+      }
+      return newValue
+    })
   }
 
   const handleExportMarksToCSV = () => {
@@ -625,7 +700,23 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
     const schoolId = selectedClass.schoolId?._id || selectedClass.schoolId
     const subjectId = selectedClass.subjectId?._id || selectedClass._id
     const user = getUser()
-    const teacherId = user?._id || user?.id || user?.userId || '68cb13d91f1a33763113f0eb'
+    
+    // Extract teacherId from user object - try multiple possible fields
+    let teacherId = null
+    if (user) {
+      teacherId = user._id || user.id || user.userId || user.teacherId
+    }
+    
+    // Validate teacherId is present - NO FALLBACK to prevent saving as wrong teacher
+    if (!teacherId || teacherId === '') {
+      setError('Unable to identify teacher. Please log in again.')
+      console.error('Teacher ID not found in user object:', user)
+      console.error('Available user fields:', user ? Object.keys(user) : 'No user object')
+      return null
+    }
+
+    console.log('Preparing payload with teacherId:', teacherId, 'for user:', user)
+    console.log('User object structure:', JSON.stringify(user, null, 2))
 
     return {
       subjectId,
@@ -635,7 +726,8 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
       academicYear: examInfo.academicYear,
       academicTerm: examInfo.academicTerm,
       examDate: new Date(examInfo.examDate),
-      schoolId: schoolId || '68c547e28a9c12a9210a256f'
+      schoolId: schoolId || '68c547e28a9c12a9210a256f',
+      maxMarks: examInfo.totalMarks || 100 // Include maxMarks in the payload
     }
   }
 
@@ -664,8 +756,17 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
       examInfo.examType
     )
 
+    // Collect existing mark IDs for potential maxMarks update
+    const existingMarkIds = []
+
     classStudents.forEach(student => {
       const entry = getEntryForStudent(student._id)
+      
+      // Collect existing mark IDs for maxMarks update (if only totalMarks changed)
+      if (entry.markId && entry.savedKey === activeCombinationKey) {
+        existingMarkIds.push(entry.markId)
+      }
+      
       if (!entry || entry.score === '' || Number.isNaN(Number(entry.score))) {
         return
       }
@@ -680,6 +781,7 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
       if (entry.markId && entry.savedKey === activeCombinationKey) {
         const previousScore = entry.savedScore
         if (previousScore !== '' && Number(previousScore) === numericScore) {
+          // Score hasn't changed, skip this student
           return
         }
         updatePayloads.push({ markId: entry.markId, payload: base })
@@ -688,8 +790,20 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
       }
     })
 
+    // If only totalMarks changed (no student score changes), update all existing marks with new maxMarks
+    if (createPayloads.length === 0 && updatePayloads.length === 0 && existingMarkIds.length > 0) {
+      // Update all existing marks for this term with the new maxMarks value
+      const maxMarksUpdatePayload = {
+        maxMarks: examInfo.totalMarks || 100
+      }
+      updatePayloads.push(...existingMarkIds.map(markId => ({
+        markId,
+        payload: maxMarksUpdatePayload
+      })))
+    }
+
     if (createPayloads.length === 0 && updatePayloads.length === 0) {
-      setError('Please enter marks for at least one student')
+      setError('Please enter marks for at least one student or change the total marks value')
       return
     }
 
@@ -719,6 +833,7 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
       }
 
       if (createdRecords.length > 0 || updatedRecords.length > 0) {
+        // Update marksEntries state
         setMarksEntries(prev => {
           const next = { ...prev }
           const applyRecord = (record) => {
@@ -744,18 +859,105 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
           updatedRecords.forEach(applyRecord)
           return next
         })
+        
+        // Immediately add saved marks to review section (no refresh needed)
+        const selectedClass = classes.find(cls => cls._id === selectedClassId)
+        const schoolId = selectedClass?.schoolId?._id || selectedClass?.schoolId || selectedSchool || commonPayload.schoolId || ''
+        const subjectId = selectedClass?.subjectId?._id || selectedClass?._id || commonPayload.subjectId || ''
+        const user = getUser()
+        const teacherId = user?._id || user?.id || user?.userId || user?.teacherId
+        
+        // Get school name from selectedClass or schoolOptions
+        const schoolName = selectedClass?.schoolId?.name || 
+          (schoolOptions.find(s => s._id === schoolId)?.name) || 
+          'Unknown'
+        
+        // Get subject name from selectedClass
+        const subjectName = selectedClass?.subjectName || 
+          selectedClass?.subjectId?.subjectName || 
+          'Unknown'
+        
+        // Transform saved records to match review section format
+        const newMarksForReview = [...createdRecords, ...updatedRecords].map(record => {
+          const student = classStudents.find(s => {
+            const recordStudentId = record.studentId?._id || record.studentId
+            return s._id === recordStudentId
+          })
+          
+          return {
+            _id: record._id,
+            id: record._id,
+            studentId: {
+              _id: record.studentId?._id || record.studentId,
+              studentName: student?.studentName || record.studentId?.studentName || 'Unknown'
+            },
+            classId: {
+              _id: selectedClassId,
+              className: selectedClass?.className || 'Unknown',
+              subjectName: subjectName
+            },
+            subjectId: subjectId ? {
+              _id: subjectId,
+              subjectName: subjectName
+            } : null,
+            schoolId: {
+              _id: schoolId,
+              name: schoolName
+            },
+            teacherId: {
+              _id: teacherId,
+              username: user?.username || 'Unknown',
+              email: user?.email || ''
+            },
+            totalMarks: record.totalMarks || record.marks,
+            marks: record.totalMarks || record.marks,
+            maxMarks: record.maxMarks || examInfo.totalMarks || 100,
+            marksFormatted: record.marksFormatted || `${record.totalMarks || record.marks}/${record.maxMarks || examInfo.totalMarks || 100}`,
+            percentage: record.percentage || (record.totalMarks && record.maxMarks ? Math.round((record.totalMarks / record.maxMarks) * 100) : 0),
+            examType: record.examType || examInfo.examType,
+            academicYear: record.academicYear || examInfo.academicYear,
+            academicTerm: record.academicTerm || examInfo.academicTerm,
+            examDate: record.examDate || examInfo.examDate,
+            createdAt: record.createdAt || new Date().toISOString(),
+            updatedAt: record.updatedAt || new Date().toISOString()
+          }
+        })
+        
+        // Add new marks to the marks state immediately
+        setMarks(prev => {
+          // Remove any existing marks with the same IDs (for updates)
+          const existingIds = new Set(newMarksForReview.map(m => m._id))
+          const filteredPrev = prev.filter(m => {
+            const markId = m._id || m.id
+            return !existingIds.has(markId)
+          })
+          // Add the new/updated marks
+          return [...filteredPrev, ...newMarksForReview]
+        })
       }
 
-      setSuccess('Marks saved successfully for this class!')
+      const savedCount = createdRecords.length + updatedRecords.length
+      setSuccess(`✅ Successfully saved ${savedCount} mark(s)! The marks are now visible in the Review section below.`)
       setHasPendingChanges(false)
+      
+      // Auto-populate review filters to show the saved marks immediately
+      const selectedClass = classes.find(cls => cls._id === selectedClassId)
+      const schoolId = selectedClass?.schoolId?._id || selectedClass?.schoolId || selectedSchool || commonPayload.schoolId || ''
+      const subjectId = selectedClass?.subjectId?._id || selectedClass?._id || commonPayload.subjectId || ''
+      
       setFilters(prev => ({
         ...prev,
-        schoolId: prev.schoolId || selectedSchool || commonPayload.schoolId || '',
-        classId: prev.classId || selectedClassId,
-        subjectId: prev.subjectId || commonPayload.subjectId || '',
-        academicYear: prev.academicYear || examInfo.academicYear
+        schoolId: schoolId,
+        classId: selectedClassId,
+        subjectId: subjectId,
+        academicYear: examInfo.academicYear,
+        academicTerm: examInfo.academicTerm, // Include term to filter review
+        examType: examInfo.examType // Include exam type to filter review
       }))
-      await loadMarks()
+      
+      // Reload marks in background to ensure data consistency (but marks are already visible)
+      loadMarks().catch(err => console.error('Background reload error:', err))
+      // Reload existing marks for the entry form
       await loadExistingMarksForClass()
     } catch (error) {
       console.error('Error saving class marks:', error)
@@ -853,8 +1055,70 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
     : classStudents
 
   const reviewSearchValue = reviewSearchTerm.trim().toLowerCase()
+  
+  // Get current user's teacherId for filtering
+  const user = getUser()
+  const currentTeacherId = user?._id || user?.id || user?.userId || user?.teacherId
+  
+  // Apply filter criteria to marks (including teacher filter)
+  let filteredMarks = marks.filter(mark => {
+    // CRITICAL: Filter by current teacher - only show marks saved by this teacher
+    if (currentTeacherId) {
+      const markTeacherId = mark.teacherId?._id || mark.teacherId || mark.teacherId?.id
+      if (markTeacherId !== currentTeacherId && markTeacherId?.toString() !== currentTeacherId?.toString()) {
+        return false // Skip marks from other teachers
+      }
+    }
+    
+    // Filter by school
+    if (filters.schoolId) {
+      const markSchoolId = mark.schoolId?._id || mark.schoolId
+      if (markSchoolId !== filters.schoolId) return false
+    }
+    
+    // Filter by class
+    if (filters.classId) {
+      const markClassId = mark.classId?._id || mark.classId
+      if (markClassId !== filters.classId) return false
+    }
+    
+    // Filter by subject
+    if (filters.subjectId) {
+      const markSubjectId = mark.subjectId?._id || mark.subjectId
+      if (markSubjectId !== filters.subjectId) return false
+    }
+    
+    // Filter by academic year
+    if (filters.academicYear) {
+      const markYear = mark.academicYear || mark.academic_year
+      if (markYear !== filters.academicYear) return false
+    }
+    
+    // Filter by academic term
+    if (filters.academicTerm) {
+      const markTerm = mark.academicTerm || mark.academic_term
+      if (markTerm !== filters.academicTerm) return false
+    }
+    
+    // Filter by exam type
+    if (filters.examType) {
+      const markExamType = mark.examType || mark.exam_type
+      if (markExamType !== filters.examType) return false
+    }
+    
+    // Filter by date range
+    if (filters.dateFrom || filters.dateTo) {
+      const markDate = mark.examDate ? new Date(mark.examDate) : null
+      if (filters.dateFrom && markDate && markDate < new Date(filters.dateFrom)) return false
+      if (filters.dateTo && markDate && markDate > new Date(filters.dateTo)) return false
+    }
+    
+    return true
+  })
+  
+  // Apply search term filter if provided
   const marksForDisplay = reviewSearchValue
-    ? marks.filter(mark => {
+    ? filteredMarks.filter(mark => {
         const haystack = [
           mark.studentId?.studentName,
           mark.classId?.className,
@@ -869,7 +1133,7 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
           .toLowerCase()
         return haystack.includes(reviewSearchValue)
       })
-    : marks
+    : filteredMarks
 
   const lookupSchoolName = (id) => {
     if (!id) return 'Any school'
@@ -1000,12 +1264,12 @@ const filterLabelMap = {
       <div className='max-w-7xl mx-auto'>
         <div className="flex justify-between items-center mb-8">
           <h1 className='text-4xl font-bold text-white'>Marks Management</h1>
-          <button
+          {/* <button
             onClick={() => navigate('/create-marks')}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
           >
             Create New Marks
-          </button>
+          </button> */}
         </div>
         
         {success && (
@@ -1150,16 +1414,27 @@ const filterLabelMap = {
             </div>
 
             <div>
-              <label className="block text-white text-sm font-medium mb-2">Total Marks</label>
+              <label className="block text-white text-sm font-medium mb-2">
+                Total Marks (Max Score)
+                {selectedClassId && (
+                  <span className="text-green-400 text-xs ml-2">
+                    (Auto-fetched from existing marks for {getTermLabel(examInfo.academicTerm)})
+                  </span>
+                )}
+              </label>
               <input
                 type="number"
                 min="1"
-                max="100"
+                max="1000"
                 value={examInfo.totalMarks}
                 onChange={(e) => handleExamInfoChange('totalMarks', Number(e.target.value) || 100)}
                 className="w-full px-3 py-2 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500"
               />
-              <p className="text-slate-400 text-xs mt-1">Aggregate is 100% by default</p>
+              <p className="text-slate-400 text-xs mt-1">
+                {selectedClassId 
+                  ? `Automatically set from existing marks for this term. You can edit this value.`
+                  : 'Default is 100. Will auto-update when you select a class and term with existing marks.'}
+              </p>
             </div>
           </div>
 
@@ -1708,7 +1983,7 @@ const filterLabelMap = {
                       <th className="pb-3 text-white font-medium">Subject</th>
                       <th className="pb-3 text-white font-medium">Total Marks</th>
                       <th className="pb-3 text-white font-medium">Exam Date</th>
-                              <th className="pb-3 text-white font-medium">School</th>
+                        <th className="pb-3 text-white font-medium">School</th>
                       <th className="pb-3 text-white font-medium">Actions</th>
                     </tr>
                   </thead>
@@ -1740,7 +2015,7 @@ const filterLabelMap = {
                                     ) : (
                           <div className="flex items-center space-x-2">
                                         <span className="text-white font-medium text-lg">{mark.totalMarks ?? '—'}</span>
-                                        <span className="text-slate-400 text-xs">/ 100</span>
+                                        <span className="text-slate-400 text-xs">/ {mark.maxMarks}</span>
                           </div>
                                     )}
                         </td>

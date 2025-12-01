@@ -170,6 +170,19 @@ export const getMarksReport = async (schoolId) => {
   }
 };
 
+// Get all marks for admin (similar to Excel export but returns JSON)
+export const getAllMarksReport = async () => {
+  try {
+    console.log('Making get all marks report request to:', `${api.defaults.baseURL}/reports/marks/all`);
+    const response = await api.get('/reports/marks/all');
+    console.log('Get all marks report response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get all marks report API error:', error);
+    throw error;
+  }
+};
+
 export const getAttendanceReportNew = async (schoolId) => {
   try {
     console.log('Making attendance report request to:', `${api.defaults.baseURL}/reports/attendance/${schoolId}`);

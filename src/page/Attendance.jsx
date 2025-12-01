@@ -1378,14 +1378,7 @@ function Attendance() {
                       >
                         + Add Class
                       </button>
-                      <button
-                        onClick={() => {
-                          setShowAddStudentModal(true)
-                        }}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm transition-colors"
-                      >
-                        + Add Student
-            </button>
+                      
           </div>
         </div>
                 )
