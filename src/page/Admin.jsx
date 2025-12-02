@@ -51,11 +51,15 @@ function Admin() {
   const [error, setError] = useState("");
   const [schoolReport, setSchoolReport] = useState(null);
   const [marksReport, setMarksReport] = useState(null);
+  const [commentReport, setCommentReport] = useState(null);
+  const [attendanceReport, setAttendanceReport] = useState(null);
   const [selectedClassForStudents, setSelectedClassForStudents] =
     useState(null);
   const [showStudentsModal, setShowStudentsModal] = useState(false);
   const [currentCommentPage, setCurrentCommentPage] = useState(1);
   const [marksReportLoading, setMarksReportLoading] = useState(false);
+  const [commentReportLoading, setCommentReportLoading] = useState(false);
+  const [attendanceReportLoading, setAttendanceReportLoading] = useState(false);
   
   // Filter states
   const [selectedClass, setSelectedClass] = useState("");
@@ -1364,18 +1368,89 @@ function Admin() {
                                 return termMap[term] || term;
                               };
 
+                              // Helper function to extract subject name with comprehensive fallbacks
+                              const extractSubjectName = (mark) => {
+                                // Try direct subject field first
+                                if (mark.subject && typeof mark.subject === 'string' && mark.subject.trim() !== '') {
+                                  return mark.subject.trim();
+                                }
+                                
+                                // Try subjectName field
+                                if (mark.subjectName && typeof mark.subjectName === 'string' && mark.subjectName.trim() !== '') {
+                                  return mark.subjectName.trim();
+                                }
+                                
+                                // Try populated subjectId object
+                                if (mark.subjectId) {
+                                  if (typeof mark.subjectId === 'object') {
+                                    if (mark.subjectId.subjectName && typeof mark.subjectId.subjectName === 'string') {
+                                      return mark.subjectId.subjectName.trim();
+                                    }
+                                    if (mark.subjectId.name && typeof mark.subjectId.name === 'string') {
+                                      return mark.subjectId.name.trim();
+                                    }
+                                  }
+                                }
+                                
+                                // Try populated classId object
+                                if (mark.classId) {
+                                  if (typeof mark.classId === 'object') {
+                                    // Try classId.subjectName (most common)
+                                    if (mark.classId.subjectName && typeof mark.classId.subjectName === 'string') {
+                                      return mark.classId.subjectName.trim();
+                                    }
+                                    // Try classId.subject if it exists
+                                    if (mark.classId.subject && typeof mark.classId.subject === 'string') {
+                                      return mark.classId.subject.trim();
+                                    }
+                                    // Try classId.subjectId if it's populated
+                                    if (mark.classId.subjectId) {
+                                      if (typeof mark.classId.subjectId === 'object' && mark.classId.subjectId.subjectName) {
+                                        return mark.classId.subjectId.subjectName.trim();
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Last resort: Look up in classes array
+                                const classId = mark.classId?._id || mark.classId;
+                                if (classId) {
+                                  const foundClass = classes.find((cls) => {
+                                    const clsId = cls._id || cls.id;
+                                    return clsId === classId || clsId?.toString() === classId?.toString();
+                                  });
+                                  
+                                  if (foundClass) {
+                                    if (foundClass.subjectName && typeof foundClass.subjectName === 'string') {
+                                      return foundClass.subjectName.trim();
+                                    }
+                                    if (foundClass.subject && typeof foundClass.subject === 'string') {
+                                      return foundClass.subject.trim();
+                                    }
+                                    // Check if class has subjectId populated
+                                    if (foundClass.subjectId) {
+                                      if (typeof foundClass.subjectId === 'object' && foundClass.subjectId.subjectName) {
+                                        return foundClass.subjectId.subjectName.trim();
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Debug logging for missing subjects
+                                console.warn('Could not extract subject name for mark:', {
+                                  markId: mark._id || mark.id,
+                                  studentName: mark.studentId?.studentName || mark.studentName,
+                                  className: mark.classId?.className || mark.className,
+                                  availableFields: Object.keys(mark),
+                                  markData: mark
+                                });
+                                
+                                return "N/A";
+                              };
+                              
                               const headers = ["Term", "School Name", "Class", "Subject", "Student Name", "Marks"];
                               const dataRows = marksReport.marks.map((mark) => {
-                                let subjectName = "N/A";
-                                if (mark.subject) {
-                                  subjectName = mark.subject;
-                                } else if (mark.subjectId?.subjectName) {
-                                  subjectName = mark.subjectId.subjectName;
-                                } else if (mark.classId?.subjectName) {
-                                  subjectName = mark.classId.subjectName;
-                                } else if (mark.subjectName) {
-                                  subjectName = mark.subjectName;
-                                }
+                                const subjectName = extractSubjectName(mark);
                                 
                                 return [
                                   formatTerm(mark.term || mark.academicTerm || mark.academic_term),
@@ -1437,16 +1512,78 @@ function Admin() {
                                 return termMap[term] || term;
                               };
                               
-                              let subjectName = "N/A";
-                              if (mark.subject) {
-                                subjectName = mark.subject;
-                              } else if (mark.subjectId?.subjectName) {
-                                subjectName = mark.subjectId.subjectName;
-                              } else if (mark.classId?.subjectName) {
-                                subjectName = mark.classId.subjectName;
-                              } else if (mark.subjectName) {
-                                subjectName = mark.subjectName;
-                              }
+                              // Use the same extraction logic as Excel export
+                              const extractSubjectName = (mark) => {
+                                // Try direct subject field first
+                                if (mark.subject && typeof mark.subject === 'string' && mark.subject.trim() !== '') {
+                                  return mark.subject.trim();
+                                }
+                                
+                                // Try subjectName field
+                                if (mark.subjectName && typeof mark.subjectName === 'string' && mark.subjectName.trim() !== '') {
+                                  return mark.subjectName.trim();
+                                }
+                                
+                                // Try populated subjectId object
+                                if (mark.subjectId) {
+                                  if (typeof mark.subjectId === 'object') {
+                                    if (mark.subjectId.subjectName && typeof mark.subjectId.subjectName === 'string') {
+                                      return mark.subjectId.subjectName.trim();
+                                    }
+                                    if (mark.subjectId.name && typeof mark.subjectId.name === 'string') {
+                                      return mark.subjectId.name.trim();
+                                    }
+                                  }
+                                }
+                                
+                                // Try populated classId object
+                                if (mark.classId) {
+                                  if (typeof mark.classId === 'object') {
+                                    // Try classId.subjectName (most common)
+                                    if (mark.classId.subjectName && typeof mark.classId.subjectName === 'string') {
+                                      return mark.classId.subjectName.trim();
+                                    }
+                                    // Try classId.subject if it exists
+                                    if (mark.classId.subject && typeof mark.classId.subject === 'string') {
+                                      return mark.classId.subject.trim();
+                                    }
+                                    // Try classId.subjectId if it's populated
+                                    if (mark.classId.subjectId) {
+                                      if (typeof mark.classId.subjectId === 'object' && mark.classId.subjectId.subjectName) {
+                                        return mark.classId.subjectId.subjectName.trim();
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Last resort: Look up in classes array
+                                const classId = mark.classId?._id || mark.classId;
+                                if (classId) {
+                                  const foundClass = classes.find((cls) => {
+                                    const clsId = cls._id || cls.id;
+                                    return clsId === classId || clsId?.toString() === classId?.toString();
+                                  });
+                                  
+                                  if (foundClass) {
+                                    if (foundClass.subjectName && typeof foundClass.subjectName === 'string') {
+                                      return foundClass.subjectName.trim();
+                                    }
+                                    if (foundClass.subject && typeof foundClass.subject === 'string') {
+                                      return foundClass.subject.trim();
+                                    }
+                                    // Check if class has subjectId populated
+                                    if (foundClass.subjectId) {
+                                      if (typeof foundClass.subjectId === 'object' && foundClass.subjectId.subjectName) {
+                                        return foundClass.subjectId.subjectName.trim();
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                return "N/A";
+                              };
+                              
+                              const subjectName = extractSubjectName(mark);
                               
                               return (
                                 <tr
@@ -1474,6 +1611,832 @@ function Admin() {
                                   </td>
                                   <td className="px-4 py-3 border-b border-slate-500 font-bold">
                                     {mark.marksFormatted || (mark.totalMarks || mark.marks || 0)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Comment Report Display */}
+              {commentReport && (
+                <div className="bg-slate-600 rounded-lg p-6 mb-6">
+                  <h4 className="text-lg font-semibold text-white mb-4">
+                    💬 Comment Report
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white">
+                        {commentReport.totalComments}
+                      </div>
+                      <div className="text-slate-300 text-sm">
+                        Total Comments
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white">
+                        {commentReport.teacherComments}
+                      </div>
+                      <div className="text-slate-300 text-sm">
+                        Teacher Comments
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white">
+                        {commentReport.mentorComments}
+                      </div>
+                      <div className="text-slate-300 text-sm">
+                        Mentor Comments
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white">
+                        {commentReport.totalCommenters}
+                      </div>
+                      <div className="text-slate-300 text-sm">
+                        Total Commenters
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-slate-500 rounded-lg p-4">
+                      <h5 className="text-white font-semibold mb-2">
+                        📊 Comment Statistics
+                      </h5>
+                      <div className="text-slate-300 text-sm">
+                        <div>Total Schools: {commentReport.totalSchools}</div>
+                        <div>Total Classes: {commentReport.totalClasses}</div>
+                        <div>Total Commenters: {commentReport.totalCommenters}</div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4">
+                      <h5 className="text-white font-semibold mb-2">
+                        👥 Role Distribution
+                      </h5>
+                      <div className="text-slate-300 text-sm">
+                        <div>Teachers: {commentReport.teacherComments}</div>
+                        <div>Mentors: {commentReport.mentorComments}</div>
+                        <div>Total: {commentReport.totalComments}</div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4">
+                      <h5 className="text-white font-semibold mb-2">
+                        📊 System Info
+                      </h5>
+                      <div className="text-slate-300 text-sm">
+                        <div>System: School Management System</div>
+                        <div>
+                          Generated: {new Date(commentReport.generatedAt).toLocaleDateString()}
+                        </div>
+                        <div>Comments: {commentReport.totalComments}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Detailed Comments Table */}
+                  {commentReport.comments && commentReport.comments.length > 0 && (
+                    <div className="mt-6">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
+                        <h5 className="text-white font-semibold">
+                          📋 Detailed Comments Listing
+                        </h5>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setCommentReportLoading(true);
+                              setError("");
+                              
+                              if (!commentReport.comments || commentReport.comments.length === 0) {
+                                throw new Error("No comments data available to export");
+                              }
+                              
+                              // Helper function to get commenter name
+                              const getCommenterName = (comment) => {
+                                if (comment.teacherId?.username) return comment.teacherId.username;
+                                if (comment.teacherId?.email) return comment.teacherId.email;
+                                if (typeof comment.teacherId === 'string') return comment.teacherId;
+                                return 'Unknown';
+                              };
+                              
+                              // Helper function to get commenter email
+                              const getCommenterEmail = (comment) => {
+                                if (comment.teacherId?.email) return comment.teacherId.email;
+                                return 'N/A';
+                              };
+                              
+                              // Helper function to get commenter role
+                              const getCommenterRole = (comment) => {
+                                if (comment.commenterRole) {
+                                  return comment.commenterRole === 'mentor' ? 'Mentor' : 'Teacher';
+                                }
+                                return 'Teacher';
+                              };
+                              
+                              // Helper function to format comment fields based on role
+                              const getCommentFields = (comment) => {
+                                if (comment.commenterRole === 'mentor') {
+                                  return {
+                                    field1: comment.modelLesson || 'N/A',
+                                    field2: comment.lessonObservation || 'N/A',
+                                    field1Label: 'Model Lesson',
+                                    field2Label: 'Lesson Observation'
+                                  };
+                                } else {
+                                  return {
+                                    field1: comment.successStory || 'N/A',
+                                    field2: comment.challenge || 'N/A',
+                                    field1Label: 'Success Story',
+                                    field2Label: 'Challenge'
+                                  };
+                                }
+                              };
+                              
+                              const headers = [
+                                "Role",
+                                "Commenter Name",
+                                "Commenter Email",
+                                "School Name",
+                                "Class",
+                                "Subject",
+                                "Number of Students",
+                                "Field 1 (Teacher: Success Story / Mentor: Model Lesson)",
+                                "Field 2 (Teacher: Challenge / Mentor: Lesson Observation)",
+                                "Date"
+                              ];
+                              
+                              const dataRows = commentReport.comments.map((comment) => {
+                                const fields = getCommentFields(comment);
+                                return [
+                                  getCommenterRole(comment),
+                                  getCommenterName(comment),
+                                  getCommenterEmail(comment),
+                                  comment.schoolId?.name || comment.schoolName || "N/A",
+                                  comment.className || comment.classId?.className || "N/A",
+                                  comment.subjectName || comment.classId?.subjectName || "N/A",
+                                  comment.numberOfStudents || 0,
+                                  fields.field1,
+                                  fields.field2,
+                                  comment.date ? new Date(comment.date).toLocaleDateString() : 
+                                  (comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : "N/A")
+                                ];
+                              });
+                              
+                              const allRows = [headers, ...dataRows];
+                              const worksheet = utils.aoa_to_sheet(allRows);
+                              worksheet['!cols'] = [
+                                { wch: 10 }, // Role
+                                { wch: 20 }, // Commenter Name
+                                { wch: 25 }, // Commenter Email
+                                { wch: 25 }, // School Name
+                                { wch: 15 }, // Class
+                                { wch: 20 }, // Subject
+                                { wch: 15 }, // Number of Students
+                                { wch: 50 }, // Field 1 (Success Story / Model Lesson)
+                                { wch: 50 }, // Field 2 (Challenge / Lesson Observation)
+                                { wch: 12 }  // Date
+                              ];
+                              const workbook = utils.book_new();
+                              utils.book_append_sheet(workbook, worksheet, "Comment Report");
+                              const filename = `comment-report-${new Date().toISOString().slice(0, 10)}.xlsx`;
+                              writeFile(workbook, filename);
+                              
+                              setError("");
+                              alert(`Excel file exported successfully: ${filename}`);
+                            } catch (err) {
+                              console.error("Error exporting comments:", err);
+                              setError(`Failed to export comments: ${err.message || err.toString()}`);
+                            } finally {
+                              setCommentReportLoading(false);
+                            }
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                          disabled={!commentReport.comments?.length || commentReportLoading}
+                        >
+                          {commentReportLoading ? "Exporting..." : "Export to Excel"}
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto rounded-lg border border-slate-500">
+                        <table className="min-w-full text-sm text-left">
+                          <thead className="bg-slate-800 text-slate-200 uppercase text-xs">
+                            <tr>
+                              <th className="px-4 py-3 border-b border-slate-600">Role</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Commenter Name</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Commenter Email</th>
+                              <th className="px-4 py-3 border-b border-slate-600">School Name</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Class</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Subject</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Students</th>
+                              <th className="px-4 py-3 border-b border-slate-600">
+                                <div className="flex flex-col">
+                                  <span>Teacher: Success Story</span>
+                                  <span className="text-xs text-purple-300">Mentor: Model Lesson</span>
+                                </div>
+                              </th>
+                              <th className="px-4 py-3 border-b border-slate-600">
+                                <div className="flex flex-col">
+                                  <span>Teacher: Challenge</span>
+                                  <span className="text-xs text-purple-300">Mentor: Lesson Observation</span>
+                                </div>
+                              </th>
+                              <th className="px-4 py-3 border-b border-slate-600">Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {commentReport.comments.map((comment, index) => {
+                              // Helper function to get commenter name
+                              const getCommenterName = (comment) => {
+                                if (comment.teacherId?.username) return comment.teacherId.username;
+                                if (comment.teacherId?.email) return comment.teacherId.email;
+                                if (typeof comment.teacherId === 'string') return comment.teacherId;
+                                return 'Unknown';
+                              };
+                              
+                              // Helper function to get commenter email
+                              const getCommenterEmail = (comment) => {
+                                if (comment.teacherId?.email) return comment.teacherId.email;
+                                return 'N/A';
+                              };
+                              
+                              // Helper function to get commenter role
+                              const getCommenterRole = (comment) => {
+                                if (comment.commenterRole) {
+                                  return comment.commenterRole === 'mentor' ? 'Mentor' : 'Teacher';
+                                }
+                                return 'Teacher';
+                              };
+                              
+                              // Helper function to get comment content
+                              const getCommentContent = (comment) => {
+                                if (comment.commenterRole === 'mentor') {
+                                  return comment.modelLesson || comment.lessonObservation || comment.successStory || comment.challenge || 'N/A';
+                                } else {
+                                  return comment.successStory || comment.challenge || 'N/A';
+                                }
+                              };
+                              
+                              const role = getCommenterRole(comment);
+                              const roleColor = role === 'Mentor' ? 'bg-purple-600' : 'bg-blue-600';
+                              
+                              return (
+                                <tr
+                                  key={comment._id || index}
+                                  className={
+                                    index % 2 === 0
+                                      ? "bg-slate-700 text-white"
+                                      : "bg-slate-600 text-white"
+                                  }
+                                >
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    <span className={`${roleColor} text-white px-2 py-1 rounded text-xs`}>
+                                      {role}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500 font-medium">
+                                    {getCommenterName(comment)}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    {getCommenterEmail(comment)}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    {comment.schoolId?.name || comment.schoolName || "N/A"}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    {comment.className || comment.classId?.className || "N/A"}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    {comment.subjectName || comment.classId?.subjectName || "N/A"}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    {comment.numberOfStudents || 0}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    <div className="max-w-md truncate" title={getCommentContent(comment)}>
+                                      {getCommentContent(comment)}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    {comment.date ? new Date(comment.date).toLocaleDateString() : 
+                                     (comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : "N/A")}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Attendance Report Display */}
+              {attendanceReport && (
+                <div className="bg-slate-600 rounded-lg p-6 mb-6">
+                  <h4 className="text-lg font-semibold text-white mb-4">
+                    📋 Attendance Report
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white">
+                        {attendanceReport.totalRecords}
+                      </div>
+                      <div className="text-slate-300 text-sm">
+                        Total Records
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-green-400">
+                        {attendanceReport.presentCount}
+                      </div>
+                      <div className="text-slate-300 text-sm">
+                        Present
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-red-400">
+                        {attendanceReport.absentCount}
+                      </div>
+                      <div className="text-slate-300 text-sm">
+                        Absent
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-white">
+                        {attendanceReport.attendanceRate}%
+                      </div>
+                      <div className="text-slate-300 text-sm">
+                        Attendance Rate
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-slate-500 rounded-lg p-4">
+                      <h5 className="text-white font-semibold mb-2">
+                        📊 Attendance Statistics
+                      </h5>
+                      <div className="text-slate-300 text-sm">
+                        <div>Total Students: {attendanceReport.totalStudents}</div>
+                        <div>Total Schools: {attendanceReport.totalSchools}</div>
+                        <div>Total Classes: {attendanceReport.totalClasses}</div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4">
+                      <h5 className="text-white font-semibold mb-2">
+                        📈 Status Distribution
+                      </h5>
+                      <div className="text-slate-300 text-sm">
+                        <div>Present: {attendanceReport.presentCount}</div>
+                        <div>Absent: {attendanceReport.absentCount}</div>
+                        <div>Late: {attendanceReport.lateCount}</div>
+                        <div>Excused: {attendanceReport.excusedCount}</div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-500 rounded-lg p-4">
+                      <h5 className="text-white font-semibold mb-2">
+                        📊 System Info
+                      </h5>
+                      <div className="text-slate-300 text-sm">
+                        <div>System: School Management System</div>
+                        <div>
+                          Generated: {new Date(attendanceReport.generatedAt).toLocaleDateString()}
+                        </div>
+                        <div>Records: {attendanceReport.totalRecords}</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Detailed Attendance Table */}
+                  {attendanceReport.attendance && attendanceReport.attendance.length > 0 && (
+                    <div className="mt-6">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
+                        <h5 className="text-white font-semibold">
+                          📋 Detailed Attendance Listing
+                        </h5>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setAttendanceReportLoading(true);
+                              setError("");
+                              
+                              if (!attendanceReport.attendance || attendanceReport.attendance.length === 0) {
+                                throw new Error("No attendance data available to export");
+                              }
+                              
+                              // Helper function to extract school name with comprehensive fallbacks
+                              const extractSchoolName = (attendance) => {
+                                // Get the school lookup map from the report
+                                const schoolMap = attendanceReport.schoolLookupMap || {};
+                                
+                                // Try direct schoolName field
+                                if (attendance.schoolName && typeof attendance.schoolName === 'string' && attendance.schoolName.trim() !== '') {
+                                  return attendance.schoolName.trim();
+                                }
+                                
+                                // Try populated schoolId object
+                                if (attendance.schoolId) {
+                                  if (typeof attendance.schoolId === 'object' && !attendance.schoolId.toString) {
+                                    // It's an object, not a string ObjectId
+                                    if (attendance.schoolId.name && typeof attendance.schoolId.name === 'string') {
+                                      return attendance.schoolId.name.trim();
+                                    }
+                                  }
+                                }
+                                
+                                // Try to get school from studentId (students have schoolId)
+                                if (attendance.studentId) {
+                                  if (typeof attendance.studentId === 'object') {
+                                    // Check if studentId has schoolId populated
+                                    if (attendance.studentId.schoolId) {
+                                      if (typeof attendance.studentId.schoolId === 'object' && attendance.studentId.schoolId.name) {
+                                        return attendance.studentId.schoolId.name.trim();
+                                      }
+                                      const studentSchId = attendance.studentId.schoolId._id || attendance.studentId.schoolId;
+                                      if (studentSchId && schoolMap[studentSchId.toString()]) {
+                                        return schoolMap[studentSchId.toString()];
+                                      }
+                                    }
+                                  }
+                                  
+                                  // Also try to find the student and get its school
+                                  const studentId = attendance.studentId?._id || attendance.studentId;
+                                  if (studentId) {
+                                    const foundStudent = students.find((stu) => {
+                                      const stuId = stu._id || stu.id;
+                                      return stuId === studentId || stuId?.toString() === studentId?.toString();
+                                    });
+                                    if (foundStudent) {
+                                      // Get school from student
+                                      if (foundStudent.schoolId) {
+                                        if (typeof foundStudent.schoolId === 'object' && foundStudent.schoolId.name) {
+                                          return foundStudent.schoolId.name.trim();
+                                        }
+                                        const studentSchId = foundStudent.schoolId._id || foundStudent.schoolId;
+                                        if (studentSchId && schoolMap[studentSchId.toString()]) {
+                                          return schoolMap[studentSchId.toString()];
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Try to get school from classId (classes have schoolId)
+                                if (attendance.classId) {
+                                  let classSchoolId = null;
+                                  
+                                  if (typeof attendance.classId === 'object') {
+                                    // Check if classId has schoolId populated
+                                    if (attendance.classId.schoolId) {
+                                      if (typeof attendance.classId.schoolId === 'object' && attendance.classId.schoolId.name) {
+                                        return attendance.classId.schoolId.name.trim();
+                                      }
+                                      classSchoolId = attendance.classId.schoolId._id || attendance.classId.schoolId;
+                                    }
+                                  }
+                                  
+                                  // If we have classSchoolId, look it up in map
+                                  if (classSchoolId && schoolMap[classSchoolId.toString()]) {
+                                    return schoolMap[classSchoolId.toString()];
+                                  }
+                                  
+                                  // Also try to find the class and get its school
+                                  const classId = attendance.classId?._id || attendance.classId;
+                                  if (classId) {
+                                    const foundClass = classes.find((cls) => {
+                                      const clsId = cls._id || cls.id;
+                                      return clsId === classId || clsId?.toString() === classId?.toString();
+                                    });
+                                    if (foundClass) {
+                                      // Get school from class
+                                      if (foundClass.schoolId) {
+                                        if (typeof foundClass.schoolId === 'object' && foundClass.schoolId.name) {
+                                          return foundClass.schoolId.name.trim();
+                                        }
+                                        const classSchId = foundClass.schoolId._id || foundClass.schoolId;
+                                        if (classSchId && schoolMap[classSchId.toString()]) {
+                                          return schoolMap[classSchId.toString()];
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Last resort: Look up in schoolMap using attendance's schoolId
+                                const schoolId = attendance.schoolId?._id || attendance.schoolId;
+                                if (schoolId && schoolMap[schoolId.toString()]) {
+                                  return schoolMap[schoolId.toString()];
+                                }
+                                
+                                // Final fallback: Look up in schoolOptions array
+                                if (schoolId) {
+                                  const foundSchool = schoolOptions.find((school) => {
+                                    const schId = school._id || school.id;
+                                    return schId === schoolId || schId?.toString() === schoolId?.toString();
+                                  });
+                                  if (foundSchool?.name) {
+                                    return foundSchool.name;
+                                  }
+                                }
+                                
+                                return "N/A";
+                              };
+                              
+                              // Helper function to extract subject name
+                              const extractSubjectName = (attendance) => {
+                                if (attendance.subjectName && typeof attendance.subjectName === 'string') {
+                                  return attendance.subjectName.trim();
+                                }
+                                if (attendance.classId?.subjectName) {
+                                  return attendance.classId.subjectName;
+                                }
+                                if (attendance.classId?.subject) {
+                                  return attendance.classId.subject;
+                                }
+                                // Look up in classes array
+                                const classId = attendance.classId?._id || attendance.classId;
+                                if (classId) {
+                                  const foundClass = classes.find((cls) => {
+                                    const clsId = cls._id || cls.id;
+                                    return clsId === classId || clsId?.toString() === classId?.toString();
+                                  });
+                                  if (foundClass?.subjectName) {
+                                    return foundClass.subjectName;
+                                  }
+                                }
+                                return "N/A";
+                              };
+                              
+                              const headers = [
+                                "School Name",
+                                "Student Name",
+                                "Class",
+                                "Subject",
+                                "Date",
+                                "Status"
+                              ];
+                              
+                              const dataRows = attendanceReport.attendance.map((attendance) => {
+                                const schoolName = extractSchoolName(attendance);
+                                const studentName = attendance.studentId?.studentName || attendance.studentName || "N/A";
+                                const className = attendance.classId?.className || attendance.className || "N/A";
+                                const subjectName = extractSubjectName(attendance);
+                                const date = attendance.date 
+                                  ? new Date(attendance.date).toLocaleDateString() 
+                                  : (attendance.createdAt 
+                                    ? new Date(attendance.createdAt).toLocaleDateString() 
+                                    : "N/A");
+                                const status = attendance.status || "N/A";
+                                
+                                return [
+                                  schoolName,
+                                  studentName,
+                                  className,
+                                  subjectName,
+                                  date,
+                                  status
+                                ];
+                              });
+                              
+                              const allRows = [headers, ...dataRows];
+                              const worksheet = utils.aoa_to_sheet(allRows);
+                              worksheet['!cols'] = [
+                                { wch: 25 }, // School Name
+                                { wch: 30 }, // Student Name
+                                { wch: 15 }, // Class
+                                { wch: 20 }, // Subject
+                                { wch: 12 }, // Date
+                                { wch: 12 }  // Status
+                              ];
+                              const workbook = utils.book_new();
+                              utils.book_append_sheet(workbook, worksheet, "Attendance Report");
+                              const filename = `attendance-report-${new Date().toISOString().slice(0, 10)}.xlsx`;
+                              writeFile(workbook, filename);
+                              
+                              setError("");
+                              alert(`Excel file exported successfully: ${filename}`);
+                            } catch (err) {
+                              console.error("Error exporting attendance:", err);
+                              setError(`Failed to export attendance: ${err.message || err.toString()}`);
+                            } finally {
+                              setAttendanceReportLoading(false);
+                            }
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                          disabled={!attendanceReport.attendance?.length || attendanceReportLoading}
+                        >
+                          {attendanceReportLoading ? "Exporting..." : "Export to Excel"}
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto rounded-lg border border-slate-500">
+                        <table className="min-w-full text-sm text-left">
+                          <thead className="bg-slate-800 text-slate-200 uppercase text-xs">
+                            <tr>
+                              <th className="px-4 py-3 border-b border-slate-600">School Name</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Student Name</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Class</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Subject</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Date</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {attendanceReport.attendance.map((attendance, index) => {
+                              // Helper function to extract school name with comprehensive fallbacks
+                              const extractSchoolName = (attendance) => {
+                                // Get the school lookup map from the report
+                                const schoolMap = attendanceReport.schoolLookupMap || {};
+                                
+                                // Try direct schoolName field
+                                if (attendance.schoolName && typeof attendance.schoolName === 'string' && attendance.schoolName.trim() !== '') {
+                                  return attendance.schoolName.trim();
+                                }
+                                
+                                // Try populated schoolId object
+                                if (attendance.schoolId) {
+                                  if (typeof attendance.schoolId === 'object' && !attendance.schoolId.toString) {
+                                    // It's an object, not a string ObjectId
+                                    if (attendance.schoolId.name && typeof attendance.schoolId.name === 'string') {
+                                      return attendance.schoolId.name.trim();
+                                    }
+                                  }
+                                }
+                                
+                                // Try to get school from studentId (students have schoolId)
+                                if (attendance.studentId) {
+                                  if (typeof attendance.studentId === 'object') {
+                                    // Check if studentId has schoolId populated
+                                    if (attendance.studentId.schoolId) {
+                                      if (typeof attendance.studentId.schoolId === 'object' && attendance.studentId.schoolId.name) {
+                                        return attendance.studentId.schoolId.name.trim();
+                                      }
+                                      const studentSchId = attendance.studentId.schoolId._id || attendance.studentId.schoolId;
+                                      if (studentSchId && schoolMap[studentSchId.toString()]) {
+                                        return schoolMap[studentSchId.toString()];
+                                      }
+                                    }
+                                  }
+                                  
+                                  // Also try to find the student and get its school
+                                  const studentId = attendance.studentId?._id || attendance.studentId;
+                                  if (studentId) {
+                                    const foundStudent = students.find((stu) => {
+                                      const stuId = stu._id || stu.id;
+                                      return stuId === studentId || stuId?.toString() === studentId?.toString();
+                                    });
+                                    if (foundStudent) {
+                                      // Get school from student
+                                      if (foundStudent.schoolId) {
+                                        if (typeof foundStudent.schoolId === 'object' && foundStudent.schoolId.name) {
+                                          return foundStudent.schoolId.name.trim();
+                                        }
+                                        const studentSchId = foundStudent.schoolId._id || foundStudent.schoolId;
+                                        if (studentSchId && schoolMap[studentSchId.toString()]) {
+                                          return schoolMap[studentSchId.toString()];
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Try to get school from classId (classes have schoolId)
+                                if (attendance.classId) {
+                                  let classSchoolId = null;
+                                  
+                                  if (typeof attendance.classId === 'object') {
+                                    // Check if classId has schoolId populated
+                                    if (attendance.classId.schoolId) {
+                                      if (typeof attendance.classId.schoolId === 'object' && attendance.classId.schoolId.name) {
+                                        return attendance.classId.schoolId.name.trim();
+                                      }
+                                      classSchoolId = attendance.classId.schoolId._id || attendance.classId.schoolId;
+                                    }
+                                  }
+                                  
+                                  // If we have classSchoolId, look it up in map
+                                  if (classSchoolId && schoolMap[classSchoolId.toString()]) {
+                                    return schoolMap[classSchoolId.toString()];
+                                  }
+                                  
+                                  // Also try to find the class and get its school
+                                  const classId = attendance.classId?._id || attendance.classId;
+                                  if (classId) {
+                                    const foundClass = classes.find((cls) => {
+                                      const clsId = cls._id || cls.id;
+                                      return clsId === classId || clsId?.toString() === classId?.toString();
+                                    });
+                                    if (foundClass) {
+                                      // Get school from class
+                                      if (foundClass.schoolId) {
+                                        if (typeof foundClass.schoolId === 'object' && foundClass.schoolId.name) {
+                                          return foundClass.schoolId.name.trim();
+                                        }
+                                        const classSchId = foundClass.schoolId._id || foundClass.schoolId;
+                                        if (classSchId && schoolMap[classSchId.toString()]) {
+                                          return schoolMap[classSchId.toString()];
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Last resort: Look up in schoolMap using attendance's schoolId
+                                const schoolId = attendance.schoolId?._id || attendance.schoolId;
+                                if (schoolId && schoolMap[schoolId.toString()]) {
+                                  return schoolMap[schoolId.toString()];
+                                }
+                                
+                                // Final fallback: Look up in schoolOptions array
+                                if (schoolId) {
+                                  const foundSchool = schoolOptions.find((school) => {
+                                    const schId = school._id || school.id;
+                                    return schId === schoolId || schId?.toString() === schoolId?.toString();
+                                  });
+                                  if (foundSchool?.name) {
+                                    return foundSchool.name;
+                                  }
+                                }
+                                
+                                return "N/A";
+                              };
+                              
+                              // Helper function to extract subject name
+                              const extractSubjectName = (attendance) => {
+                                if (attendance.subjectName && typeof attendance.subjectName === 'string') {
+                                  return attendance.subjectName.trim();
+                                }
+                                if (attendance.classId?.subjectName) {
+                                  return attendance.classId.subjectName;
+                                }
+                                if (attendance.classId?.subject) {
+                                  return attendance.classId.subject;
+                                }
+                                // Look up in classes array
+                                const classId = attendance.classId?._id || attendance.classId;
+                                if (classId) {
+                                  const foundClass = classes.find((cls) => {
+                                    const clsId = cls._id || cls.id;
+                                    return clsId === classId || clsId?.toString() === classId?.toString();
+                                  });
+                                  if (foundClass?.subjectName) {
+                                    return foundClass.subjectName;
+                                  }
+                                }
+                                return "N/A";
+                              };
+                              
+                              const schoolName = extractSchoolName(attendance);
+                              const studentName = attendance.studentId?.studentName || attendance.studentName || "N/A";
+                              const className = attendance.classId?.className || attendance.className || "N/A";
+                              const subjectName = extractSubjectName(attendance);
+                              const date = attendance.date 
+                                ? new Date(attendance.date).toLocaleDateString() 
+                                : (attendance.createdAt 
+                                  ? new Date(attendance.createdAt).toLocaleDateString() 
+                                  : "N/A");
+                              const status = attendance.status || "N/A";
+                              
+                              // Status color coding
+                              const getStatusColor = (status) => {
+                                const statusLower = status?.toLowerCase();
+                                if (statusLower === 'present') return 'text-green-400 font-semibold';
+                                if (statusLower === 'absent') return 'text-red-400 font-semibold';
+                                if (statusLower === 'late') return 'text-yellow-400 font-semibold';
+                                if (statusLower === 'excused') return 'text-blue-400 font-semibold';
+                                return 'text-slate-300';
+                              };
+                              
+                              return (
+                                <tr
+                                  key={attendance._id || index}
+                                  className={
+                                    index % 2 === 0
+                                      ? "bg-slate-700 text-white"
+                                      : "bg-slate-600 text-white"
+                                  }
+                                >
+                                  <td className="px-4 py-3 border-b border-slate-500 font-medium">
+                                    {schoolName}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    {studentName}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    {className}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    {subjectName}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    {date}
+                                  </td>
+                                  <td className={`px-4 py-3 border-b border-slate-500 ${getStatusColor(status)}`}>
+                                    {status.toUpperCase()}
                                   </td>
                                 </tr>
                               );
@@ -1889,46 +2852,311 @@ function Admin() {
                   </div>
                 </button>
                 
+                {/* Comment Report */}
+                <button
+                  onClick={async () => {
+                    try {
+                      setCommentReportLoading(true);
+                      setError("");
+
+                      // Fetch all comments for admin
+                      let commentsArray = [];
+                      try {
+                        console.log("Fetching all comments for admin...");
+                        const commentsData = await commentAPI.getAllCommentsForAdmin();
+                        console.log("Comments API response:", commentsData);
+                        
+                        // Handle different response structures
+                        if (Array.isArray(commentsData)) {
+                          commentsArray = commentsData;
+                        } else if (commentsData?.data && Array.isArray(commentsData.data)) {
+                          commentsArray = commentsData.data;
+                        } else if (commentsData?.comments && Array.isArray(commentsData.comments)) {
+                          commentsArray = commentsData.comments;
+                        } else if (commentsData?.records && Array.isArray(commentsData.records)) {
+                          commentsArray = commentsData.records;
+                        }
+                        console.log(`Found ${commentsArray.length} comments`);
+                      } catch (commentsError) {
+                        console.error("Error fetching comments:", commentsError);
+                        setError(`Failed to fetch comments: ${commentsError.message || "Unknown error"}`);
+                        setCommentReport(null);
+                        return;
+                      }
+                      
+                      if (!commentsArray || commentsArray.length === 0) {
+                        setError("No comments data found.");
+                        setCommentReport(null);
+                        return;
+                      }
+
+                      // Calculate statistics
+                      const totalComments = commentsArray.length;
+                      const teacherComments = commentsArray.filter(c => 
+                        c.commenterRole === 'teacher' || (!c.commenterRole && c.teacherId)
+                      ).length;
+                      const mentorComments = commentsArray.filter(c => 
+                        c.commenterRole === 'mentor'
+                      ).length;
+                      
+                      // Get unique teachers/mentors
+                      const uniqueCommenters = new Set(
+                        commentsArray.map(c => {
+                          const teacherId = c.teacherId?._id || c.teacherId || c.teacherId?.id;
+                          return teacherId?.toString();
+                        }).filter(Boolean)
+                      );
+                      
+                      // Get unique schools
+                      const uniqueSchools = new Set(
+                        commentsArray.map(c => {
+                          const schoolId = c.schoolId?._id || c.schoolId;
+                          return schoolId?.toString();
+                        }).filter(Boolean)
+                      );
+                      
+                      // Get unique classes
+                      const uniqueClasses = new Set(
+                        commentsArray.map(c => {
+                          const classId = c.classId?._id || c.classId || c.className;
+                          return classId?.toString();
+                        }).filter(Boolean)
+                      );
+                      
+                      // Create comment report object
+                      const report = {
+                        comments: commentsArray,
+                        totalComments,
+                        teacherComments,
+                        mentorComments,
+                        totalCommenters: uniqueCommenters.size,
+                        totalSchools: uniqueSchools.size,
+                        totalClasses: uniqueClasses.size,
+                        generatedAt: new Date(),
+                        generatedBy: 'School Management System',
+                      };
+
+                      setCommentReport(report);
+                      console.log("Comment report generated:", report);
+                    } catch (err) {
+                      console.error("Error loading comment report:", err);
+                      setError(`Failed to load comment report: ${err.message || err.response?.data?.message || "Unknown error"}`);
+                      setCommentReport(null);
+                    } finally {
+                      setCommentReportLoading(false);
+                    }
+                  }}
+                  disabled={commentReportLoading}
+                  className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white p-4 rounded-lg transition-colors"
+                >
+                  <div className="text-center">
+                    <span className="text-2xl mb-2 block">💬</span>
+                    <h4 className="font-medium">Daily Report</h4>
+                    <p className="text-sm text-purple-200 mt-1">
+                      Teacher & Mentor comments
+                    </p>
+                  </div>
+                </button>
+                
                 {/* Attendance Report */}
                 <button
                   onClick={async () => {
                     try {
-                      setLoading(true);
+                      setAttendanceReportLoading(true);
                       setError("");
 
-                      const schoolId = "68c547e28a9c12a9210a256f"; // Replace with actual school ID
-                      const report = await reportsAPI.getAttendanceReportNew(
-                        schoolId
-                      );
+                      // Fetch all attendance records for admin
+                      let attendanceArray = [];
+                      try {
+                        console.log("Fetching all attendance records for admin...");
+                        
+                        // Try to fetch from reports endpoint first (with populated school data)
+                        try {
+                          console.log("Trying to fetch all attendance from reports endpoint...");
+                          const reportsAttendanceData = await reportsAPI.getAllAttendanceReport();
+                          console.log("Reports attendance response:", reportsAttendanceData);
+                          
+                          // Handle different response structures
+                          if (Array.isArray(reportsAttendanceData)) {
+                            attendanceArray = reportsAttendanceData;
+                          } else if (reportsAttendanceData?.data && Array.isArray(reportsAttendanceData.data)) {
+                            attendanceArray = reportsAttendanceData.data;
+                          } else if (reportsAttendanceData?.records && Array.isArray(reportsAttendanceData.records)) {
+                            attendanceArray = reportsAttendanceData.records;
+                          } else if (reportsAttendanceData?.attendance && Array.isArray(reportsAttendanceData.attendance)) {
+                            attendanceArray = reportsAttendanceData.attendance;
+                          }
+                          console.log(`Found ${attendanceArray.length} attendance records from reports endpoint`);
+                        } catch (reportsError) {
+                          console.warn("Reports endpoint not available, trying admin endpoint:", reportsError);
+                          
+                          // Fallback: Use admin endpoint
+                          const attendanceData = await getAllAttendanceAdmin();
+                          console.log("Attendance API response:", attendanceData);
+                          
+                          // Handle different response structures
+                          if (Array.isArray(attendanceData)) {
+                            attendanceArray = attendanceData;
+                          } else if (attendanceData?.data && Array.isArray(attendanceData.data)) {
+                            attendanceArray = attendanceData.data;
+                          } else if (attendanceData?.records && Array.isArray(attendanceData.records)) {
+                            attendanceArray = attendanceData.records;
+                          } else if (attendanceData?.attendance && Array.isArray(attendanceData.attendance)) {
+                            attendanceArray = attendanceData.attendance;
+                          }
+                          console.log(`Found ${attendanceArray.length} attendance records from admin endpoint`);
+                        }
+                        
+                        // Debug: Log first attendance record structure to understand data format
+                        if (attendanceArray.length > 0) {
+                          console.log("Sample attendance record structure:", {
+                            firstRecord: attendanceArray[0],
+                            schoolId: attendanceArray[0].schoolId,
+                            schoolIdType: typeof attendanceArray[0].schoolId,
+                            schoolIdIsObject: attendanceArray[0].schoolId && typeof attendanceArray[0].schoolId === 'object',
+                            schoolName: attendanceArray[0].schoolName,
+                            classId: attendanceArray[0].classId,
+                            classIdType: typeof attendanceArray[0].classId,
+                            studentId: attendanceArray[0].studentId,
+                            studentIdType: typeof attendanceArray[0].studentId,
+                            allKeys: Object.keys(attendanceArray[0])
+                          });
+                        }
+                      } catch (attendanceError) {
+                        console.error("Error fetching attendance:", attendanceError);
+                        setError(`Failed to fetch attendance: ${attendanceError.message || "Unknown error"}`);
+                        setAttendanceReport(null);
+                        return;
+                      }
+                      
+                      if (!attendanceArray || attendanceArray.length === 0) {
+                        setError("No attendance data found.");
+                        setAttendanceReport(null);
+                        return;
+                      }
 
+                      // Build comprehensive school lookup map from all available sources
+                      const schoolLookupMap = new Map();
+                      
+                      // 1. Add schools from schoolOptions
+                      schoolOptions.forEach(school => {
+                        const schoolId = school._id || school.id;
+                        if (schoolId && school.name) {
+                          schoolLookupMap.set(schoolId.toString(), school.name);
+                        }
+                      });
+                      
+                      // 2. Add schools from classes
+                      classes.forEach(cls => {
+                        const schoolId = cls.schoolId?._id || cls.schoolId;
+                        const schoolName = cls.schoolId?.name;
+                        if (schoolId && schoolName) {
+                          schoolLookupMap.set(schoolId.toString(), schoolName);
+                        }
+                      });
+                      
+                      // 3. Add schools from students
+                      students.forEach(student => {
+                        const schoolId = student.schoolId?._id || student.schoolId;
+                        const schoolName = student.schoolId?.name;
+                        if (schoolId && schoolName) {
+                          schoolLookupMap.set(schoolId.toString(), schoolName);
+                        }
+                      });
+                      
+                      // 4. Add schools from attendance records themselves (if populated)
+                      attendanceArray.forEach(attendance => {
+                        if (attendance.schoolId) {
+                          const schoolId = attendance.schoolId._id || attendance.schoolId;
+                          const schoolName = attendance.schoolId.name || attendance.schoolName;
+                          if (schoolId && schoolName) {
+                            schoolLookupMap.set(schoolId.toString(), schoolName);
+                          }
+                        }
+                        if (attendance.schoolName && typeof attendance.schoolName === 'string') {
+                          // If we have schoolName but no schoolId, we can't map it, but we'll use it directly
+                        }
+                      });
+                      
+                      console.log(`Built school lookup map with ${schoolLookupMap.size} schools:`, Array.from(schoolLookupMap.entries()));
+
+                      // Calculate statistics
+                      const totalRecords = attendanceArray.length;
+                      const presentCount = attendanceArray.filter(a => 
+                        a.status?.toLowerCase() === 'present'
+                      ).length;
+                      const absentCount = attendanceArray.filter(a => 
+                        a.status?.toLowerCase() === 'absent'
+                      ).length;
+                      const lateCount = attendanceArray.filter(a => 
+                        a.status?.toLowerCase() === 'late'
+                      ).length;
+                      const excusedCount = attendanceArray.filter(a => 
+                        a.status?.toLowerCase() === 'excused'
+                      ).length;
+                      
+                      // Get unique values
+                      const uniqueStudents = new Set(
+                        attendanceArray.map(a => {
+                          const studentId = a.studentId?._id || a.studentId || a.studentId?.id;
+                          return studentId?.toString();
+                        }).filter(Boolean)
+                      );
+                      
+                      const uniqueSchools = new Set(
+                        attendanceArray.map(a => {
+                          const schoolId = a.schoolId?._id || a.schoolId;
+                          return schoolId?.toString();
+                        }).filter(Boolean)
+                      );
+                      
+                      const uniqueClasses = new Set(
+                        attendanceArray.map(a => {
+                          const classId = a.classId?._id || a.classId;
+                          return classId?.toString();
+                        }).filter(Boolean)
+                      );
+                      
+                      // Calculate attendance rate
+                      const attendanceRate = totalRecords > 0 
+                        ? Math.round((presentCount / totalRecords) * 100) 
+                        : 0;
+                      
+                      // Create attendance report object
+                      const report = {
+                        attendance: attendanceArray,
+                        totalRecords,
+                        presentCount,
+                        absentCount,
+                        lateCount,
+                        excusedCount,
+                        attendanceRate,
+                        totalStudents: uniqueStudents.size,
+                        totalSchools: uniqueSchools.size,
+                        totalClasses: uniqueClasses.size,
+                        schoolLookupMap: Object.fromEntries(schoolLookupMap), // Store lookup map for use in extraction
+                        generatedAt: new Date(),
+                        generatedBy: 'School Management System',
+                      };
+
+                      setAttendanceReport(report);
                       console.log("Attendance report generated:", report);
-                      alert(
-                        `Attendance Report Generated!\n\nSchool ID: ${
-                          report.schoolId
-                        }\nAttendance Summary: ${JSON.stringify(
-                          report.attendanceSummary
-                        )}`
-                      );
-                    } catch (error) {
-                      console.error(
-                        "Error generating attendance report:",
-                        error
-                      );
-                      setError(
-                        "Failed to generate attendance report: " +
-                          (error.response?.data?.message || error.message)
-                      );
+                    } catch (err) {
+                      console.error("Error loading attendance report:", err);
+                      setError(`Failed to load attendance report: ${err.message || err.response?.data?.message || "Unknown error"}`);
+                      setAttendanceReport(null);
                     } finally {
-                      setLoading(false);
+                      setAttendanceReportLoading(false);
                     }
                   }}
-                  className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-lg transition-colors"
+                  disabled={attendanceReportLoading}
+                  className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white p-4 rounded-lg transition-colors"
                 >
                   <div className="text-center">
                     <span className="text-2xl mb-2 block">📋</span>
                     <h4 className="font-medium">Attendance Report</h4>
                     <p className="text-sm text-purple-200 mt-1">
-                      Attendance analytics
+                      Student attendance records
                     </p>
                   </div>
                 </button>

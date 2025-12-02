@@ -878,31 +878,60 @@ function Attendance() {
 
     try {
       const selectedClassData = classes.find(cls => cls.className === selectedClass)
-      const classStudents = students.filter(student => student.classId === selectedClassData._id)
+      if (!selectedClassData) {
+        setError('Class not found.')
+        return
+      }
+      
+      const classStudents = students.filter(student => {
+        const studentClassId = getSafeClassId(student.classId)
+        return studentClassId === selectedClassData._id
+      })
+      
+      // Ensure all students have a status (default to 'absent' if not set)
+      const attendanceMap = { ...studentAttendance }
+      classStudents.forEach(student => {
+        if (!attendanceMap[student._id] || !attendanceMap[student._id].status) {
+          attendanceMap[student._id] = {
+            status: 'absent',
+            remarks: ''
+          }
+        }
+      })
+      setStudentAttendance(attendanceMap)
       
       // Prepare bulk attendance data
-      const attendanceRecords = classStudents.map(student => ({
+      const attendanceRecords = classStudents.map(student => {
+        const attendance = attendanceMap[student._id] || { status: 'absent', remarks: '' }
+        const studentSchoolId = getSafeSchoolId(student.schoolId) || getSafeSchoolId(selectedClassData.schoolId) || availableSchools[0]?._id || '68c547e28a9c12a9210a256f'
+        return {
         studentId: student._id,
         classId: selectedClassData._id,
-        schoolId: student.schoolId || '68c547e28a9c12a9210a256f', // Use a real MongoDB ObjectId format
+          schoolId: studentSchoolId,
         date: attendanceDate,
-        status: studentAttendance[student._id]?.status || 'absent',
-        remarks: studentAttendance[student._id]?.remarks || ''
-      }))
+          status: attendance.status || 'absent',
+          remarks: attendance.remarks || ''
+        }
+      })
 
       console.log('Saving bulk attendance data:', attendanceRecords)
 
       const response = await attendanceAPI.createBulkAttendance(attendanceRecords)
       console.log('Bulk attendance saved successfully:', response)
       
-      setSuccess('Attendance saved successfully!')
+      // Reload attendance records to get updated data
+      await loadAttendanceRecords(selectedClassData._id)
       
       // Reload attendance records and summary to update the counts
       await loadAllAttendanceRecords()
       await loadAttendanceSummaryForAllClasses(attendanceDate)
       
-      // Navigate to success page immediately
-        navigate('/success')
+      setSuccess('Attendance saved successfully!')
+      
+      // Don't navigate away, just show success message
+      setTimeout(() => {
+        setSuccess('')
+      }, 3000)
 
     } catch (error) {
       console.error('Save attendance error:', error)
@@ -1174,76 +1203,6 @@ function Attendance() {
           </div>
         )}
         
-        {userRole === 'mentor' ? (
-          <div className='bg-slate-700 rounded-lg p-6 mb-8'>
-            <h2 className='text-2xl font-bold text-white mb-3'>Mentor Setup</h2>
-            <p className='text-slate-300 mb-6'>
-              As a mentor you can only create or update schools and classes. Use the quick actions below to keep teacher resources up to date.
-            </p>
-            {schoolLoading && (
-              <div className='bg-slate-600 rounded-lg p-4 mb-6 text-white text-sm'>
-                Loading school information...
-              </div>
-            )}
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-              <button
-                onClick={() => setShowCreateSchoolModal(true)}
-                className='bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold transition-colors'
-              >
-                + Create School
-              </button>
-              <button
-                onClick={() => {
-                  loadAvailableSchools()
-                  setShowCreateClassModal(true)
-                }}
-                className='bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-semibold transition-colors'
-              >
-                + Create Class
-              </button>
-            </div>
-            {availableSchools.length > 0 && (
-              <div className='mt-6'>
-                <h3 className='text-white font-semibold mb-3'>Your Schools</h3>
-                <div className='space-y-3'>
-                  {availableSchools.map((school) => {
-                    const schoolClasses = classes.filter(
-                      (cls) => getSafeSchoolId(cls?.schoolId) === school._id
-                    )
-                    return (
-                      <div
-                        key={school._id}
-                        className='bg-slate-600 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2'
-                      >
-                        <div>
-                          <p className='text-white font-medium'>{school.name}</p>
-                          {school.principal && (
-                            <p className='text-slate-300 text-xs'>Principal: {school.principal}</p>
-                          )}
-                        </div>
-                        <div className='text-right'>
-                          <p className='text-slate-300 text-sm'>{schoolClasses.length} classes</p>
-                          {school.address && (
-                            <p className='text-slate-500 text-xs truncate max-w-48'>{school.address}</p>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-            {availableSchools.length === 0 && !schoolLoading && (
-              <p className='text-slate-300 text-sm mt-6'>
-                No schools yet. Click &ldquo;Create School&rdquo; to add your first one.
-              </p>
-            )}
-            <p className='text-slate-400 text-xs mt-6'>
-              Need to record attendance? Please sign in as a teacher.
-            </p>
-          </div>
-        ) : (
-          <>
         {/* School Management Section */}
         {schoolLoading ? (
           <div className="bg-slate-700 rounded-lg p-6 mb-6">
@@ -1307,7 +1266,6 @@ function Attendance() {
                         )}
                       </div>
                       <div className="flex space-x-2">
-                        {userRole === 'admin' && (
                           <button
                             onClick={() => {
                               setMySchool(school)
@@ -1317,7 +1275,6 @@ function Attendance() {
                           >
                             Edit
                           </button>
-                        )}
                         <button
                           onClick={() => setPrimarySchool(school)}
                           className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm transition-colors"
@@ -1628,39 +1585,74 @@ function Attendance() {
                           
                           // Save attendance directly and show summary
                           try {
-                            // First load current attendance data
+                            setLoading(true)
+                            setError('')
+                            setSuccess('')
+                            
+                            // First load current attendance data for this class and date
                             await loadAttendanceRecords(cls._id)
                             
-                            // Then save the attendance
+                            // Then get all students for this class
                             const classStudents = students.filter(student => {
                               const studentClassId = typeof student.classId === 'object' ? student.classId._id : student.classId
                               return studentClassId === cls._id
                             })
                             
+                            // Ensure all students have a status (default to 'absent' if not set)
+                            const attendanceMap = { ...studentAttendance }
+                            classStudents.forEach(student => {
+                              if (!attendanceMap[student._id] || !attendanceMap[student._id].status) {
+                                attendanceMap[student._id] = {
+                                  status: 'absent',
+                                  remarks: ''
+                                }
+                              }
+                            })
+                            setStudentAttendance(attendanceMap)
+                            
                             // Prepare bulk attendance data
-                            const attendanceRecords = classStudents.map(student => ({
+                            const attendanceRecords = classStudents.map(student => {
+                              const attendance = attendanceMap[student._id] || { status: 'absent', remarks: '' }
+                              const studentSchoolId = getSafeSchoolId(student.schoolId) || getSafeSchoolId(cls.schoolId) || availableSchools[0]?._id || '68c547e28a9c12a9210a256f'
+                              return {
                               studentId: student._id,
                               classId: cls._id,
-                              schoolId: student.schoolId || '68c547e28a9c12a9210a256f',
+                                schoolId: studentSchoolId,
                               date: attendanceDate,
-                              status: studentAttendance[student._id]?.status || 'absent',
-                              remarks: studentAttendance[student._id]?.remarks || ''
-                            }))
+                                status: attendance.status || 'absent',
+                                remarks: attendance.remarks || ''
+                              }
+                            })
 
                             console.log('Saving bulk attendance data:', attendanceRecords)
                             const response = await attendanceAPI.createBulkAttendance(attendanceRecords)
                             console.log('Bulk attendance saved successfully:', response)
+                            
+                            // Reload attendance records to get updated data
+                            await loadAttendanceRecords(cls._id)
                             
                             // Load updated summary
                             await loadAttendanceSummary(cls._id, attendanceDate)
                             
                             setSuccess(`Attendance for ${className} on ${new Date(attendanceDate).toLocaleDateString()} saved successfully! Summary updated.`)
                             
-                            // Navigate to success page
-                            navigate('/success')
+                            // Don't navigate away, just show success message
+                            setTimeout(() => {
+                              setSuccess('')
+                            }, 3000)
                           } catch (error) {
                             console.error('Error saving attendance:', error)
-                            setError('Failed to save attendance. Please try again.')
+                            let errorMessage = 'Failed to save attendance. Please try again.'
+                            if (error.response) {
+                              errorMessage = error.response.data?.message || `Server error: ${error.response.status}`
+                            } else if (error.request) {
+                              errorMessage = 'Network error. Please check your connection.'
+                            } else {
+                              errorMessage = error.message || 'An unexpected error occurred.'
+                            }
+                            setError(errorMessage)
+                          } finally {
+                            setLoading(false)
                           }
                         } else {
                           setError('No students in this class. Add students first.')
@@ -1739,7 +1731,7 @@ function Attendance() {
             {attendanceSummary.classBreakdown && attendanceSummary.classBreakdown.length > 0 && (
               <div className='mt-6'>
                 <div className='flex justify-between items-center mb-4'>
-                                  <h3 className='text-lg font-semibold text-white mb-4'>📋 Per-Class Breakdown</h3>
+                <h3 className='text-lg font-semibold text-white mb-4'>📋 Per-Class Breakdown</h3>
                                   <div className="flex items-center space-x-4">
               <label className='text-white text-sm font-medium'>Select Date:</label>
                   <input
@@ -1755,6 +1747,7 @@ function Attendance() {
                   {attendanceSummary.classBreakdown.map(classData => (
                     <div key={classData.classId} className='bg-slate-600 rounded-lg p-4'>
                       <h4 className='text-white font-semibold mb-2'>{classData.className} for this Date <span className='text-black font-bold bg-amber-300 text-sm rounded-full px-2 py-1'>{attendanceDate}</span></h4>
+                      <h1>student</h1>
                       <div className='space-y-2 text-sm'>
                         <div className='flex justify-between'>
                           <span className='text-slate-300'>Total:</span>
@@ -1789,9 +1782,6 @@ function Attendance() {
               </div>
             )}
           </div>
-        )}
-
-          </>
         )}
 
         {/* Create School Modal */}
@@ -2351,7 +2341,11 @@ function Attendance() {
                     
                     // Save attendance directly and show summary
                     try {
-                      // First load current attendance data
+                      setLoading(true)
+                      setError('')
+                      setSuccess('')
+                      
+                      // First load current attendance data for this class and date
                       await loadAttendanceRecords(selectedClassForStudents._id)
                       
                       // Then save the attendance
@@ -2362,31 +2356,65 @@ function Attendance() {
                           return studentClassId === selectedClassForStudents._id
                         })
                         
+                        // Ensure all students have a status (default to 'absent' if not set)
+                        const attendanceMap = { ...studentAttendance }
+                        classStudents.forEach(student => {
+                          if (!attendanceMap[student._id] || !attendanceMap[student._id].status) {
+                            attendanceMap[student._id] = {
+                              status: 'absent',
+                              remarks: ''
+                            }
+                          }
+                        })
+                        setStudentAttendance(attendanceMap)
+                        
                         // Prepare bulk attendance data
-                        const attendanceRecords = classStudents.map(student => ({
+                        const attendanceRecords = classStudents.map(student => {
+                          const attendance = attendanceMap[student._id] || { status: 'absent', remarks: '' }
+                          const studentSchoolId = getSafeSchoolId(student.schoolId) || getSafeSchoolId(selectedClassData.schoolId) || availableSchools[0]?._id || '68c547e28a9c12a9210a256f'
+                          return {
                           studentId: student._id,
                           classId: selectedClassData._id,
-                          schoolId: student.schoolId || '68c547e28a9c12a9210a256f',
+                            schoolId: studentSchoolId,
                           date: attendanceDate,
-                          status: studentAttendance[student._id]?.status || 'absent',
-                          remarks: studentAttendance[student._id]?.remarks || ''
-                        }))
+                            status: attendance.status || 'absent',
+                            remarks: attendance.remarks || ''
+                          }
+                        })
 
                         console.log('Saving bulk attendance data:', attendanceRecords)
                         const response = await attendanceAPI.createBulkAttendance(attendanceRecords)
                         console.log('Bulk attendance saved successfully:', response)
+                        
+                        // Reload attendance records to get updated data
+                        await loadAttendanceRecords(selectedClassForStudents._id)
                         
                         // Load updated summary
                         await loadAttendanceSummary(selectedClassForStudents._id, attendanceDate)
                         
                         setSuccess(`Attendance for ${className} saved successfully! Summary updated.`)
                         
-                        // Navigate to success page
-                        navigate('/success')
+                        // Close modal after a short delay
+                        setTimeout(() => {
+                          setShowStudentsModal(false)
+                          setSuccess('')
+                        }, 1500)
+                      } else {
+                        setError('Class data not found.')
                       }
                     } catch (error) {
                       console.error('Error saving attendance:', error)
-                      setError('Failed to save attendance. Please try again.')
+                      let errorMessage = 'Failed to save attendance. Please try again.'
+                      if (error.response) {
+                        errorMessage = error.response.data?.message || `Server error: ${error.response.status}`
+                      } else if (error.request) {
+                        errorMessage = 'Network error. Please check your connection.'
+                      } else {
+                        errorMessage = error.message || 'An unexpected error occurred.'
+                      }
+                      setError(errorMessage)
+                    } finally {
+                      setLoading(false)
                     }
                   }}
                   className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"

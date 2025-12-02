@@ -212,7 +212,26 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
       console.log('Number of marks after teacher filtering:', filteredMarks.length);
       console.log('Current teacher ID for filtering:', currentTeacherId);
       
-      setMarks(filteredMarks);
+      // Merge with existing marks instead of replacing to preserve newly added marks
+      setMarks(prev => {
+        // Create a map of existing marks by ID for quick lookup
+        const existingMarksMap = new Map()
+        prev.forEach(mark => {
+          const markId = mark._id || mark.id
+          if (markId) existingMarksMap.set(markId.toString(), mark)
+        })
+        
+        // Add/update marks from backend
+        filteredMarks.forEach(mark => {
+          const markId = mark._id || mark.id
+          if (markId) {
+            existingMarksMap.set(markId.toString(), mark)
+          }
+        })
+        
+        // Return merged marks array
+        return Array.from(existingMarksMap.values())
+      });
     } catch (error) {
       console.error('Error loading marks:', error);
       if (error.response) {
@@ -923,7 +942,20 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
           }
         })
         
-        // Add new marks to the marks state immediately
+        // Auto-populate review filters FIRST to show the saved marks immediately
+        // (selectedClass, schoolId, subjectId already declared above)
+        // Set filters first so the marks will match when added
+        setFilters(prev => ({
+          ...prev,
+          schoolId: schoolId,
+          classId: selectedClassId,
+          subjectId: subjectId,
+          academicYear: examInfo.academicYear,
+          academicTerm: examInfo.academicTerm, // Include term to filter review
+          examType: examInfo.examType // Include exam type to filter review
+        }))
+        
+        // Add new marks to the marks state immediately (after filters are set)
         setMarks(prev => {
           // Remove any existing marks with the same IDs (for updates)
           const existingIds = new Set(newMarksForReview.map(m => m._id))
@@ -939,21 +971,6 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
       const savedCount = createdRecords.length + updatedRecords.length
       setSuccess(`✅ Successfully saved ${savedCount} mark(s)! The marks are now visible in the Review section below.`)
       setHasPendingChanges(false)
-      
-      // Auto-populate review filters to show the saved marks immediately
-      const selectedClass = classes.find(cls => cls._id === selectedClassId)
-      const schoolId = selectedClass?.schoolId?._id || selectedClass?.schoolId || selectedSchool || commonPayload.schoolId || ''
-      const subjectId = selectedClass?.subjectId?._id || selectedClass?._id || commonPayload.subjectId || ''
-      
-      setFilters(prev => ({
-        ...prev,
-        schoolId: schoolId,
-        classId: selectedClassId,
-        subjectId: subjectId,
-        academicYear: examInfo.academicYear,
-        academicTerm: examInfo.academicTerm, // Include term to filter review
-        examType: examInfo.examType // Include exam type to filter review
-      }))
       
       // Reload marks in background to ensure data consistency (but marks are already visible)
       loadMarks().catch(err => console.error('Background reload error:', err))

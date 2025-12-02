@@ -183,6 +183,19 @@ export const getAllMarksReport = async () => {
   }
 };
 
+// Get all attendance for admin (similar to getAllMarksReport but returns JSON with populated school data)
+export const getAllAttendanceReport = async () => {
+  try {
+    console.log('Making get all attendance report request to:', `${api.defaults.baseURL}/reports/attendance/all`);
+    const response = await api.get('/reports/attendance/all');
+    console.log('Get all attendance report response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Get all attendance report API error:', error);
+    throw error;
+  }
+};
+
 export const getAttendanceReportNew = async (schoolId) => {
   try {
     console.log('Making attendance report request to:', `${api.defaults.baseURL}/reports/attendance/${schoolId}`);
