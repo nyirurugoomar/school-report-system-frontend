@@ -247,8 +247,20 @@ function Attendance() {
   const updateSchool = async (schoolData) => {
     try {
       setSchoolLoading(true)
+      
+      // Ensure we have the school ID
+      if (!schoolData._id) {
+        throw new Error('School ID is missing. Cannot update school.')
+      }
+      
+      console.log('Updating school with data:', {
+        _id: schoolData._id,
+        name: schoolData.name,
+        address: schoolData.address
+      })
+      
       const response = await schoolAPI.updateMySchool(schoolData)
-      console.log('School updated:', response)
+      console.log('School updated successfully:', response)
       
       // Reload school data to get the updated information
       await loadMySchool()
@@ -257,7 +269,8 @@ function Attendance() {
       setSuccess('School updated successfully!')
     } catch (error) {
       console.error('Error updating school:', error)
-      setError('Failed to update school: ' + (error.response?.data?.message || error.message))
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to update school'
+      setError(errorMessage)
     } finally {
       setSchoolLoading(false)
     }
@@ -320,17 +333,8 @@ function Attendance() {
       setStudents(response)
     } catch (error) {
       console.error('Error loading students:', error)
-      // Fallback to mock data if API fails
-      setStudents([
-        { _id: '1', studentName: 'John Doe', classId: '1', schoolId: '68c547e28a9c12a9210a256f' },
-        { _id: '2', studentName: 'Jane Smith', classId: '1', schoolId: '68c547e28a9c12a9210a256f' },
-        { _id: '3', studentName: 'Mike Johnson', classId: '2', schoolId: '68c547e28a9c12a9210a256f' },
-        { _id: '4', studentName: 'Sarah Wilson', classId: '2', schoolId: '68c547e28a9c12a9210a256f' },
-        { _id: '5', studentName: 'David Brown', classId: '3', schoolId: '68c547e28a9c12a9210a256f' },
-        { _id: '6', studentName: 'Emily Davis', classId: '3', schoolId: '68c547e28a9c12a9210a256f' },
-        { _id: '7', studentName: 'Chris Miller', classId: '4', schoolId: '68c547e28a9c12a9210a256f' },
-        { _id: '8', studentName: 'Lisa Garcia', classId: '4', schoolId: '68c547e28a9c12a9210a256f' }
-      ])
+      setError('Failed to load students. Please try again.')
+      setStudents([]) // Don't use mock data in production
     }
   }
 
@@ -795,11 +799,18 @@ function Attendance() {
       }
       setStudentAttendance(updatedAttendanceMap)
 
+      // Validate schoolId before saving
+      const studentSchoolId = getSafeSchoolId(student.schoolId)
+      if (!studentSchoolId) {
+        setError(`School ID is missing for student ${getStudentName(student)}. Cannot save attendance.`)
+        return
+      }
+
       // Prepare attendance data for bulk API
       const attendanceData = {
         studentId: studentId,
         classId: targetClassId,
-        schoolId: student.schoolId || '68c547e28a9c12a9210a256f',
+        schoolId: studentSchoolId,
         date: attendanceDate,
         status: status,
         remarks: status === 'late' ? 'Late arrival' : status === 'excused' ? 'Excused absence' : ''
@@ -903,7 +914,15 @@ function Attendance() {
       // Prepare bulk attendance data
       const attendanceRecords = classStudents.map(student => {
         const attendance = attendanceMap[student._id] || { status: 'absent', remarks: '' }
-        const studentSchoolId = getSafeSchoolId(student.schoolId) || getSafeSchoolId(selectedClassData.schoolId) || availableSchools[0]?._id || '68c547e28a9c12a9210a256f'
+        // Try multiple sources for schoolId, but don't use hardcoded fallback
+        const studentSchoolId = getSafeSchoolId(student.schoolId) || 
+                               getSafeSchoolId(selectedClassData.schoolId) || 
+                               availableSchools[0]?._id
+        
+        if (!studentSchoolId) {
+          console.error(`Missing schoolId for student ${getStudentName(student)}`)
+        }
+        
         return {
         studentId: student._id,
         classId: selectedClassData._id,
@@ -913,6 +932,13 @@ function Attendance() {
           remarks: attendance.remarks || ''
         }
       })
+
+      // Validate all records have schoolId before saving
+      const invalidRecords = attendanceRecords.filter(record => !record.schoolId)
+      if (invalidRecords.length > 0) {
+        setError(`Cannot save attendance: ${invalidRecords.length} student(s) are missing school ID. Please ensure all students have an associated school.`)
+        return
+      }
 
       console.log('Saving bulk attendance data:', attendanceRecords)
 
@@ -1108,10 +1134,18 @@ function Attendance() {
       if (!selectedClassData) return
 
       const promises = studentsInSelectedClass.map(async (student) => {
+        // Validate schoolId before saving
+        const studentSchoolId = getSafeSchoolId(student.schoolId)
+        if (!studentSchoolId) {
+          setError(`School ID is missing for student ${getStudentName(student)}. Cannot save attendance.`)
+          setLoading(false)
+          return
+        }
+
         const attendanceData = {
           studentId: student._id,
           classId: selectedClassData._id,
-          schoolId: student.schoolId || '68c547e28a9c12a9210a256f', // Use a real MongoDB ObjectId format
+          schoolId: studentSchoolId,
           date: attendanceDate,
           status: status,
           remarks: status === 'late' ? 'Late arrival' : status === 'excused' ? 'Excused absence' : ''
@@ -1613,7 +1647,14 @@ function Attendance() {
                             // Prepare bulk attendance data
                             const attendanceRecords = classStudents.map(student => {
                               const attendance = attendanceMap[student._id] || { status: 'absent', remarks: '' }
-                              const studentSchoolId = getSafeSchoolId(student.schoolId) || getSafeSchoolId(cls.schoolId) || availableSchools[0]?._id || '68c547e28a9c12a9210a256f'
+                              // Try multiple sources for schoolId, but don't use hardcoded fallback
+                              const studentSchoolId = getSafeSchoolId(student.schoolId) || 
+                                                     getSafeSchoolId(cls.schoolId) || 
+                                                     availableSchools[0]?._id
+                              
+                              if (!studentSchoolId) {
+                                console.error(`Missing schoolId for student ${getStudentName(student)}`)
+                              }
                               return {
                               studentId: student._id,
                               classId: cls._id,
@@ -1745,10 +1786,9 @@ function Attendance() {
                 
                 <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
                   {attendanceSummary.classBreakdown.map(classData => (
-                    <div key={classData.classId} className='bg-slate-600 rounded-lg p-4'>
-                      <h4 className='text-white font-semibold mb-2'>{classData.className} for this Date <span className='text-black font-bold bg-amber-300 text-sm rounded-full px-2 py-1'>{attendanceDate}</span></h4>
-                      <h1>student</h1>
-                      <div className='space-y-2 text-sm'>
+                      <div key={classData.classId} className='bg-slate-600 rounded-lg p-4'>
+                        <h4 className='text-white font-semibold mb-2'>{classData.className} for this Date <span className='text-black font-bold bg-amber-300 text-sm rounded-full px-2 py-1'>{attendanceDate}</span></h4>
+                        <div className='space-y-2 text-sm'>
                         <div className='flex justify-between'>
                           <span className='text-slate-300'>Total:</span>
                           <span className='text-white font-semibold'>{classData.total}</span>
@@ -1866,61 +1906,6 @@ function Attendance() {
                     className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
                   />
                 </div>
-                
-                <div>
-                  <label className='block text-white text-sm font-medium mb-2'>Phone Number</label>
-                  <input
-                    type='text'
-                    value={mySchool.phone || ''}
-                    onChange={(e) => setMySchool({...mySchool, phone: e.target.value})}
-                    placeholder='e.g., +1 (555) 123-4567'
-                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
-                  />
-                </div>
-                
-                <div>
-                  <label className='block text-white text-sm font-medium mb-2'>Email Address</label>
-                  <input
-                    type='email'
-                    value={mySchool.email || ''}
-                    onChange={(e) => setMySchool({...mySchool, email: e.target.value})}
-                    placeholder='e.g., info@school.edu'
-                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
-                  />
-                </div>
-                
-                <div>
-                  <label className='block text-white text-sm font-medium mb-2'>Principal Name</label>
-                  <input
-                    type='text'
-                    value={mySchool.principal || ''}
-                    onChange={(e) => setMySchool({...mySchool, principal: e.target.value})}
-                    placeholder='e.g., Dr. John Smith'
-                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
-                  />
-                </div>
-                
-                <div>
-                  <label className='block text-white text-sm font-medium mb-2'>Established Year</label>
-                  <input
-                    type='number'
-                    value={mySchool.establishedYear || ''}
-                    onChange={(e) => setMySchool({...mySchool, establishedYear: e.target.value})}
-                    placeholder='e.g., 2000'
-                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
-                  />
-                </div>
-                
-                <div>
-                  <label className='block text-white text-sm font-medium mb-2'>Description</label>
-                  <textarea
-                    value={mySchool.description || ''}
-                    onChange={(e) => setMySchool({...mySchool, description: e.target.value})}
-                    placeholder='Brief description of the school...'
-                    rows={3}
-                    className='w-full px-4 py-3 bg-slate-600 text-white rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400'
-                  />
-                </div>
               </div>
               
               <div className='flex justify-end space-x-3 mt-6'>
@@ -1931,8 +1916,18 @@ function Attendance() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => updateSchool(mySchool)}
-                  disabled={schoolLoading || !mySchool.name.trim()}
+                  onClick={() => {
+                    if (!mySchool._id) {
+                      setError('School ID is missing. Please refresh and try again.')
+                      return
+                    }
+                    updateSchool({
+                      _id: mySchool._id,
+                      name: mySchool.name.trim(),
+                      address: (mySchool.address || '').trim()
+                    })
+                  }}
+                  disabled={schoolLoading || !mySchool.name.trim() || !mySchool._id}
                   className='px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-500 text-white rounded-lg transition-colors'
                 >
                   {schoolLoading ? 'Updating...' : 'Update School'}
@@ -2371,7 +2366,15 @@ function Attendance() {
                         // Prepare bulk attendance data
                         const attendanceRecords = classStudents.map(student => {
                           const attendance = attendanceMap[student._id] || { status: 'absent', remarks: '' }
-                          const studentSchoolId = getSafeSchoolId(student.schoolId) || getSafeSchoolId(selectedClassData.schoolId) || availableSchools[0]?._id || '68c547e28a9c12a9210a256f'
+                          // Try multiple sources for schoolId, but don't use hardcoded fallback
+                          const studentSchoolId = getSafeSchoolId(student.schoolId) || 
+                                                 getSafeSchoolId(selectedClassData.schoolId) || 
+                                                 availableSchools[0]?._id
+                          
+                          if (!studentSchoolId) {
+                            console.error(`Missing schoolId for student ${getStudentName(student)}`)
+                          }
+                          
                           return {
                           studentId: student._id,
                           classId: selectedClassData._id,

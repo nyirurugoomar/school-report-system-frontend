@@ -183,7 +183,7 @@ function CreateMarks() {
           academicYear: formData.academicYear,
           academicTerm: formData.academicTerm,
           examDate: new Date(formData.examDate),
-          schoolId: student?.schoolId || '68c547e28a9c12a9210a256f' // This is already a string ObjectId
+          schoolId: student?.schoolId // Validate before use - no hardcoded fallback
         }
       })
 
@@ -195,6 +195,7 @@ function CreateMarks() {
         !record.subjectId || 
         !record.classId || 
         !record.teacherId ||
+        !record.schoolId || // Validate schoolId is present
         record.studentId.trim() === '' ||
         record.subjectId.trim() === '' ||
         record.classId.trim() === '' ||

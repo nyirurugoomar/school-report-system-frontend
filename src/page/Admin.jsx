@@ -1340,6 +1340,20 @@ function Admin() {
                               setMarksReportLoading(true);
                               setError("");
                               
+                              // Ensure users are loaded for role detection in export
+                              let usersForExport = users;
+                              if (users.length === 0) {
+                                console.log("Loading users for Excel export role detection...");
+                                try {
+                                  const usersData = await getAllUsersAdmin();
+                                  usersForExport = usersData || [];
+                                  setUsers(usersForExport);
+                                  console.log(`Loaded ${usersForExport.length} users for export`);
+                                } catch (usersError) {
+                                  console.warn("Could not load users for export:", usersError);
+                                }
+                              }
+                              
                               // Try backend endpoint first
                               try {
                                 const result = await marksAPI.exportMarksToExcel();
@@ -1448,9 +1462,64 @@ function Admin() {
                                 return "N/A";
                               };
                               
-                              const headers = ["Term", "School Name", "Class", "Subject", "Student Name", "Marks"];
+                              // Helper function to determine submitter role (same as in table display)
+                              // Use usersForExport instead of users to ensure we have the latest data
+                              const getSubmitterRole = (mark) => {
+                                // Check if mark has a direct role field (like commenterRole)
+                                if (mark.commenterRole) {
+                                  return mark.commenterRole === 'mentor' ? 'Mentor' : 'Teacher';
+                                }
+                                if (mark.role) {
+                                  return mark.role === 'mentor' ? 'Mentor' : 'Teacher';
+                                }
+                                
+                                // Check if teacherId is populated and has role field
+                                if (mark.teacherId) {
+                                  // If teacherId is an object (populated)
+                                  if (typeof mark.teacherId === 'object' && mark.teacherId !== null) {
+                                    // Check if role is directly on teacherId object
+                                    if (mark.teacherId.role) {
+                                      return mark.teacherId.role === 'mentor' ? 'Mentor' : 'Teacher';
+                                    }
+                                    
+                                    // Extract teacherId for lookup
+                                    const teacherId = mark.teacherId._id || mark.teacherId.id || mark.teacherId;
+                                    
+                                    // Look up user in usersForExport array by teacherId
+                                    if (teacherId && usersForExport.length > 0) {
+                                      const user = usersForExport.find(u => {
+                                        const userId = u._id || u.id;
+                                        return userId === teacherId || userId?.toString() === teacherId?.toString();
+                                      });
+                                      if (user && user.role) {
+                                        console.log('Found role in export:', user.role, 'for teacherId:', teacherId);
+                                        return user.role === 'mentor' ? 'Mentor' : 'Teacher';
+                                      }
+                                    }
+                                  } else if (typeof mark.teacherId === 'string') {
+                                    // If teacherId is a string (not populated), look it up in usersForExport array
+                                    if (usersForExport.length > 0) {
+                                      const user = usersForExport.find(u => {
+                                        const userId = u._id || u.id;
+                                        return userId === mark.teacherId || userId?.toString() === mark.teacherId?.toString();
+                                      });
+                                      if (user && user.role) {
+                                        console.log('Found role in export (string ID):', user.role, 'for teacherId:', mark.teacherId);
+                                        return user.role === 'mentor' ? 'Mentor' : 'Teacher';
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Default to Teacher if role cannot be determined
+                                console.warn('Could not determine role for mark in export, defaulting to Teacher:', mark._id);
+                                return 'Teacher';
+                              };
+                              
+                              const headers = ["Term", "School Name", "Class", "Subject", "Student Name", "Marks", "Submitted By"];
                               const dataRows = marksReport.marks.map((mark) => {
                                 const subjectName = extractSubjectName(mark);
+                                const submitterRole = getSubmitterRole(mark);
                                 
                                 return [
                                   formatTerm(mark.term || mark.academicTerm || mark.academic_term),
@@ -1459,13 +1528,14 @@ function Admin() {
                                   subjectName,
                                   mark.studentId?.studentName || mark.studentName || "N/A",
                                   mark.marks || mark.totalMarks || 0, // Use marks field (numeric value for Excel)
+                                  submitterRole,
                                 ];
                               });
 
                               const allRows = [headers, ...dataRows];
                               const worksheet = utils.aoa_to_sheet(allRows);
                               worksheet['!cols'] = [
-                                { wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 20 }, { wch: 30 }, { wch: 10 }
+                                { wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 20 }, { wch: 30 }, { wch: 10 }, { wch: 12 }
                               ];
                               const workbook = utils.book_new();
                               utils.book_append_sheet(workbook, worksheet, "Marks Report");
@@ -1498,6 +1568,7 @@ function Admin() {
                               <th className="px-4 py-3 border-b border-slate-600">Subject</th>
                               <th className="px-4 py-3 border-b border-slate-600">Student Name</th>
                               <th className="px-4 py-3 border-b border-slate-600">Marks</th>
+                              <th className="px-4 py-3 border-b border-slate-600">Submitted By</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1510,6 +1581,84 @@ function Admin() {
                                   THIRD_TERM: "Third Term",
                                 };
                                 return termMap[term] || term;
+                              };
+                              
+                              // Helper function to determine if mark was submitted by mentor or teacher
+                              const getSubmitterRole = (mark) => {
+                                console.log('Determining role for mark:', {
+                                  markId: mark._id,
+                                  teacherId: mark.teacherId,
+                                  teacherIdType: typeof mark.teacherId,
+                                  usersCount: users.length
+                                });
+                                
+                                // Check if mark has a direct role field (like commenterRole)
+                                if (mark.commenterRole) {
+                                  const role = mark.commenterRole === 'mentor' ? 'Mentor' : 'Teacher';
+                                  console.log('Found role from commenterRole:', role);
+                                  return role;
+                                }
+                                if (mark.role) {
+                                  const role = mark.role === 'mentor' ? 'Mentor' : 'Teacher';
+                                  console.log('Found role from mark.role:', role);
+                                  return role;
+                                }
+                                
+                                // Check if teacherId is populated and has role field
+                                if (mark.teacherId) {
+                                  // If teacherId is an object (populated)
+                                  if (typeof mark.teacherId === 'object' && mark.teacherId !== null) {
+                                    // Check if role is directly on teacherId object
+                                    if (mark.teacherId.role) {
+                                      const role = mark.teacherId.role === 'mentor' ? 'Mentor' : 'Teacher';
+                                      console.log('Found role from teacherId.role:', role);
+                                      return role;
+                                    }
+                                    
+                                    // Extract teacherId for lookup
+                                    const teacherId = mark.teacherId._id || mark.teacherId.id || mark.teacherId;
+                                    console.log('Looking up user with teacherId:', teacherId);
+                                    
+                                    // Look up user in users array by teacherId
+                                    if (teacherId && users.length > 0) {
+                                      const user = users.find(u => {
+                                        const userId = u._id || u.id;
+                                        const matches = userId === teacherId || userId?.toString() === teacherId?.toString();
+                                        if (matches) {
+                                          console.log('Found user:', { userId, role: u.role, username: u.username });
+                                        }
+                                        return matches;
+                                      });
+                                      if (user && user.role) {
+                                        const role = user.role === 'mentor' ? 'Mentor' : 'Teacher';
+                                        console.log('Found role from users array:', role);
+                                        return role;
+                                      }
+                                    }
+                                  } else if (typeof mark.teacherId === 'string') {
+                                    // If teacherId is a string (not populated), look it up in users array
+                                    console.log('teacherId is string, looking up:', mark.teacherId);
+                                    if (users.length > 0) {
+                                      const user = users.find(u => {
+                                        const userId = u._id || u.id;
+                                        const matches = userId === mark.teacherId || userId?.toString() === mark.teacherId?.toString();
+                                        if (matches) {
+                                          console.log('Found user by string ID:', { userId, role: u.role, username: u.username });
+                                        }
+                                        return matches;
+                                      });
+                                      if (user && user.role) {
+                                        const role = user.role === 'mentor' ? 'Mentor' : 'Teacher';
+                                        console.log('Found role from users array (string ID):', role);
+                                        return role;
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // Default to Teacher if role cannot be determined
+                                console.warn('Could not determine role for mark, defaulting to Teacher:', mark._id);
+                                return 'Teacher';
                               };
                               
                               // Use the same extraction logic as Excel export
@@ -1584,6 +1733,7 @@ function Admin() {
                               };
                               
                               const subjectName = extractSubjectName(mark);
+                              const submitterRole = getSubmitterRole(mark);
                               
                               return (
                                 <tr
@@ -1611,6 +1761,15 @@ function Admin() {
                                   </td>
                                   <td className="px-4 py-3 border-b border-slate-500 font-bold">
                                     {mark.marksFormatted || (mark.totalMarks || mark.marks || 0)}
+                                  </td>
+                                  <td className="px-4 py-3 border-b border-slate-500">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      submitterRole === 'Mentor' 
+                                        ? 'bg-purple-600 text-white' 
+                                        : 'bg-blue-600 text-white'
+                                    }`}>
+                                      {submitterRole}
+                                    </span>
                                   </td>
                                 </tr>
                               );
@@ -2736,6 +2895,18 @@ function Admin() {
                       setMarksReportLoading(true);
                       setError("");
 
+                      // Ensure users are loaded for role detection
+                      if (users.length === 0) {
+                        console.log("Loading users for role detection...");
+                        try {
+                          const usersData = await getAllUsersAdmin();
+                          setUsers(usersData || []);
+                          console.log(`Loaded ${(usersData || []).length} users`);
+                        } catch (usersError) {
+                          console.warn("Could not load users:", usersError);
+                        }
+                      }
+
                       // Try to fetch all marks from reports endpoint first (for admin)
                       let marksArray = [];
                       try {
@@ -3215,7 +3386,17 @@ function Admin() {
                       setLoading(true);
                       setError("");
                       
-                      const schoolId = "68c547e28a9c12a9210a256f";
+                      // Get schoolId from available schools or show error
+                      const schoolId = schoolOptions && schoolOptions.length > 0 
+                        ? (schoolOptions[0]._id || schoolOptions[0].id)
+                        : null;
+                      
+                      if (!schoolId) {
+                        setError("No schools available. Please ensure schools are created before generating reports.");
+                        setLoading(false);
+                        return;
+                      }
+                      
                       await reportsAPI.downloadMarksReportPDF(schoolId);
                       
                       // PDF will open automatically for printing/saving
@@ -3250,7 +3431,17 @@ function Admin() {
                       setLoading(true);
                       setError("");
                       
-                      const schoolId = "68c547e28a9c12a9210a256f";
+                      // Get schoolId from available schools or show error
+                      const schoolId = schoolOptions && schoolOptions.length > 0 
+                        ? (schoolOptions[0]._id || schoolOptions[0].id)
+                        : null;
+                      
+                      if (!schoolId) {
+                        setError("No schools available. Please ensure schools are created before generating reports.");
+                        setLoading(false);
+                        return;
+                      }
+                      
                       await reportsAPI.downloadAttendanceReportPDF(schoolId);
                       
                       // PDF will open automatically for printing/saving

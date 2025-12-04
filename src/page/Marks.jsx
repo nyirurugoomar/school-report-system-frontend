@@ -3,7 +3,51 @@ import { useNavigate } from 'react-router-dom'
 import * as marksAPI from '../api/marks'
 import * as classAPI from '../api/class'
 import * as studentAPI from '../api/student'
-import { getUser } from '../utils/auth'
+import { getUser, isAuthenticated } from '../utils/auth'
+
+// Helper function to get current user ID (works for both teachers and mentors)
+const getCurrentUserId = () => {
+  const user = getUser()
+  
+  // Try to get user ID from user object first
+  if (user) {
+    const userId = user._id || user.id || user.userId || user.teacherId || user.mentorId
+    if (userId) {
+      return userId
+    }
+    console.warn('User object found but no ID field:', user)
+    console.warn('Available fields:', Object.keys(user))
+  } else {
+    console.warn('No user object found in localStorage')
+  }
+  
+  // Fallback: Try to extract user ID from JWT token
+  try {
+    const token = localStorage.getItem('token')
+    if (token) {
+      // JWT tokens have 3 parts separated by dots: header.payload.signature
+      const parts = token.split('.')
+      if (parts.length === 3) {
+        // Decode the payload (second part)
+        const payload = JSON.parse(atob(parts[1]))
+        console.log('JWT payload:', payload)
+        
+        // Try to get user ID from token payload
+        const userIdFromToken = payload.userId || payload.id || payload._id || payload.sub
+        if (userIdFromToken) {
+          console.log('Found user ID from JWT token:', userIdFromToken)
+          return userIdFromToken
+        }
+        console.warn('JWT token found but no userId in payload:', payload)
+      }
+    }
+  } catch (error) {
+    console.error('Error extracting user ID from token:', error)
+  }
+  
+  console.error('Unable to get user ID from user object or JWT token')
+  return null
+}
 
 function Marks() {
   const navigate = useNavigate()
@@ -95,9 +139,28 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
   return next
 }
 
+  // Check authentication and user ID on component mount
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      console.warn('User not authenticated, redirecting to login')
+      navigate('/signin', { state: { message: 'Please log in to access the Marks page.' } })
+      return
+    }
+    
+    // Check if we can get user ID
+    const userId = getCurrentUserId()
+    if (!userId) {
+      console.error('User is authenticated but user ID cannot be determined')
+      setError('Unable to identify user. Please log in again.')
+      // Don't redirect immediately - let user see the error and try to fix it
+    }
+  }, [navigate])
+
   // Load data on component mount
   useEffect(() => {
+    if (isAuthenticated()) {
     loadData()
+    }
   }, [])
 
   // Load marks when filters change
@@ -169,13 +232,11 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
 
   const loadMarks = async () => {
     try {
-      // Get current user's teacherId to filter marks
-      const user = getUser()
-      const currentTeacherId = user?._id || user?.id || user?.userId
+      // Get current user's ID to filter marks (works for both teachers and mentors)
+      const currentTeacherId = getCurrentUserId()
       
       if (!currentTeacherId) {
-        console.warn('No teacher ID found for current user')
-        setError('Unable to identify teacher. Please log in again.')
+        setError('Unable to identify user. Please log in again.')
         return
       }
       
@@ -279,12 +340,11 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
     try {
       setClassMarksLoading(true)
       
-      // Get current user's teacherId to filter marks
-      const user = getUser()
-      const currentTeacherId = user?._id || user?.id || user?.userId || user?.teacherId
+      // Get current user's ID to filter marks (works for both teachers and mentors)
+      const currentTeacherId = getCurrentUserId()
       
       if (!currentTeacherId) {
-        console.warn('No teacher ID found when loading existing marks')
+        setError('Unable to identify user. Please log in again.')
         setClassMarksLoading(false)
         return
       }
@@ -699,8 +759,8 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
         if (mode === 'all' || currentEntry.score === '' || currentEntry.score === null) {
           studentEntries[combinationKey] = {
             ...currentEntry,
-            score: numericValue
-          }
+        score: numericValue
+      }
           next[student._id] = studentEntries
         }
       })
@@ -718,24 +778,24 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
 
     const schoolId = selectedClass.schoolId?._id || selectedClass.schoolId
     const subjectId = selectedClass.subjectId?._id || selectedClass._id
-    const user = getUser()
     
-    // Extract teacherId from user object - try multiple possible fields
-    let teacherId = null
-    if (user) {
-      teacherId = user._id || user.id || user.userId || user.teacherId
-    }
+    // Get current user's ID (works for both teachers and mentors)
+    const teacherId = getCurrentUserId()
     
-    // Validate teacherId is present - NO FALLBACK to prevent saving as wrong teacher
-    if (!teacherId || teacherId === '') {
-      setError('Unable to identify teacher. Please log in again.')
-      console.error('Teacher ID not found in user object:', user)
-      console.error('Available user fields:', user ? Object.keys(user) : 'No user object')
+    // Validate user ID is present
+    if (!teacherId) {
+      setError('Unable to identify user. Please log in again.')
       return null
     }
 
-    console.log('Preparing payload with teacherId:', teacherId, 'for user:', user)
-    console.log('User object structure:', JSON.stringify(user, null, 2))
+    // Validate schoolId - don't use fallback to prevent data integrity issues
+    if (!schoolId) {
+      setError('School ID is missing. Please select a valid class with an associated school.')
+      console.error('Missing schoolId for class:', selectedClass)
+      return null
+    }
+
+    console.log('Preparing payload with userId (teacherId):', teacherId)
 
     return {
       subjectId,
@@ -745,7 +805,7 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
       academicYear: examInfo.academicYear,
       academicTerm: examInfo.academicTerm,
       examDate: new Date(examInfo.examDate),
-      schoolId: schoolId || '68c547e28a9c12a9210a256f',
+      schoolId: schoolId, // No fallback - validated above
       maxMarks: examInfo.totalMarks || 100 // Include maxMarks in the payload
     }
   }
@@ -1073,17 +1133,16 @@ const ensureMarksEntriesStructure = (entries, students, combinationKey) => {
 
   const reviewSearchValue = reviewSearchTerm.trim().toLowerCase()
   
-  // Get current user's teacherId for filtering
-  const user = getUser()
-  const currentTeacherId = user?._id || user?.id || user?.userId || user?.teacherId
+  // Get current user's ID for filtering (works for both teachers and mentors)
+  const currentTeacherId = getCurrentUserId()
   
-  // Apply filter criteria to marks (including teacher filter)
+  // Apply filter criteria to marks (including user filter)
   let filteredMarks = marks.filter(mark => {
-    // CRITICAL: Filter by current teacher - only show marks saved by this teacher
+    // CRITICAL: Filter by current user - only show marks saved by this user (teacher or mentor)
     if (currentTeacherId) {
       const markTeacherId = mark.teacherId?._id || mark.teacherId || mark.teacherId?.id
       if (markTeacherId !== currentTeacherId && markTeacherId?.toString() !== currentTeacherId?.toString()) {
-        return false // Skip marks from other teachers
+        return false // Skip marks from other users
       }
     }
     

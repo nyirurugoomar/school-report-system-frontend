@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import SignIn from './page/SignIn'
 import SignUp from './page/SignUp'
+import ChangePassword from './page/ChangePassword'
 import Comment from './page/Comment'
 import RoleSelection from './page/RoleSelection'
 import MainLayout from './layouts/MainLayout'
@@ -23,6 +24,7 @@ function App() {
         <Route path='/' element={<SignIn />} />
         <Route path='/signin' element={<SignIn />} />
         <Route path='/signup' element={<SignUp />} />
+        <Route path='/change-password' element={<ChangePassword />} />
         <Route path='/success' element={<Success />} />
         
         {/* Protected routes - require authentication */}

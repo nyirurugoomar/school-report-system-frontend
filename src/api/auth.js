@@ -26,6 +26,19 @@ export const signup = async (userData) => {
   }
 };
 
+export const changePassword = async (changePasswordData) => {
+  try {
+    console.log('Making change password request to:', `${api.defaults.baseURL}/auth/change-password`);
+    console.log('Change password data being sent:', { oldPassword: '***', newPassword: '***' });
+    const response = await api.put('/auth/change-password', changePasswordData);
+    console.log('Change password response:', response);
+    return response.data;
+  } catch (error) {
+    console.error('Change password API error:', error);
+    throw error;
+  }
+};
+
 export const createAdmin = async (adminData) => {
     try {
       console.log('Making create admin request to:', `${api.defaults.baseURL}/auth/create-admin`);
