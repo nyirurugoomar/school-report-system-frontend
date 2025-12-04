@@ -1786,9 +1786,9 @@ function Attendance() {
                 
                 <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
                   {attendanceSummary.classBreakdown.map(classData => (
-                      <div key={classData.classId} className='bg-slate-600 rounded-lg p-4'>
+                    <div key={classData.classId} className='bg-slate-600 rounded-lg p-4'>
                         <h4 className='text-white font-semibold mb-2'>{classData.className} for this Date <span className='text-black font-bold bg-amber-300 text-sm rounded-full px-2 py-1'>{attendanceDate}</span></h4>
-                        <div className='space-y-2 text-sm'>
+                      <div className='space-y-2 text-sm'>
                         <div className='flex justify-between'>
                           <span className='text-slate-300'>Total:</span>
                           <span className='text-white font-semibold'>{classData.total}</span>
@@ -1921,11 +1921,19 @@ function Attendance() {
                       setError('School ID is missing. Please refresh and try again.')
                       return
                     }
-                    updateSchool({
+                    
+                    // Build update payload with only non-empty fields
+                    const updatePayload = {
                       _id: mySchool._id,
-                      name: mySchool.name.trim(),
-                      address: (mySchool.address || '').trim()
-                    })
+                      name: mySchool.name.trim()
+                    }
+                    
+                    // Only add address if it has a value
+                    if (mySchool.address && mySchool.address.trim()) {
+                      updatePayload.address = mySchool.address.trim()
+                    }
+                    
+                    updateSchool(updatePayload)
                   }}
                   disabled={schoolLoading || !mySchool.name.trim() || !mySchool._id}
                   className='px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-500 text-white rounded-lg transition-colors'
